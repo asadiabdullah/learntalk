@@ -1,0 +1,24 @@
+{
+  "name": "rom-orchestrator",
+  "version": "1.0.0",
+  "description": "Router and Orchestrator Microservice (ROM) for Free Tier LLMs",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@fastify/static": "^7.0.4",
+    "dotenv": "^16.4.5",
+    "fastify": "^4.28.1",
+    "js-tiktoken": "*",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "@types/pg": "^8.11.6",
+    "tsx": "^4.15.7",
+    "typescript": "^5.5.2"
+  }
+}

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Administrator Router and Orchestrator Microservice</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="dashboard-body">
+  <div class="dashboard-layout">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon">R</div>
+        <h2>ROM Panel</h2>
+      </div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-item">
+          <a class="sidebar-link active" onclick="switchTab('overview')">
+            <span class="icon">📊</span> Ringkasan
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a class="sidebar-link" onclick="switchTab('providers')">
+            <span class="icon">🔑</span> Kelola Provider
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a class="sidebar-link" onclick="switchTab('models')">
+            <span class="icon">🤖</span> Kelola Model
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a class="sidebar-link" onclick="switchTab('scopes')">
+            <span class="icon">🎯</span> Kelola Scope
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a class="sidebar-link" onclick="switchTab('logs')">
+            <span class="icon">📜</span> Log Riwayat
+          </a>
+        </li>
+      </ul>
+      <div class="sidebar-footer">
+        <span>Admin Portal</span>
+        <a class="logout-link" onclick="logout()">Keluar</a>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <div class="main-wrapper">
+      <header class="main-header">
+        <h1>Administrator Router and Orchestrator Microservice</h1>
+        <div class="user-badge" id="adminUserBadge">Admin</div>
+      </header>
+
+      <main class="main-content">
+        
+        <!-- ================= RINGKASAN VIEW ================= -->
+        <section id="view-overview" class="content-view">
+          <div class="view-header">
+            <div>
+              <h2>Ringkasan Layanan</h2>
+              <p>Status operasional router microservice Anda secara riil-time.</p>
+            </div>
+          </div>
+          
+          <div class="grid-stats">
+            <div class="stat-card">
+              <div class="stat-icon blue">🔑</div>
+              <div class="stat-details">
+                <h3>Total Provider</h3>
+                <p id="stat-providers">0</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon green">🤖</div>
+              <div class="stat-details">
+                <h3>Total Model</h3>
+                <p id="stat-models">0</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon orange">🎯</div>
+              <div class="stat-details">
+                <h3>Total Scope</h3>
+                <p id="stat-scopes">0</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="view-header" style="margin-top: 40px; margin-bottom: 20px;">
+            <h3>Panduan Integrasi Aplikasi Utama</h3>
+          </div>
+          <div class="table-container" style="padding: 24px;">
+            <p style="margin-bottom: 12px;">Untuk menggunakan microservice ini di aplikasi utama Anda (seperti <strong>learntalk</strong>), Anda dapat menyalin file frontend ini ke folder publik aplikasi Anda, atau cukup arahkan API call dari backend aplikasi Anda ke proksi ini.</p>
+            <p><strong>Contoh POST Request dari Klien:</strong></p>
+            <pre style="background: #0f172a; color: #38bdf8; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; margin-top: 10px; overflow-x: auto;">
+POST http://localhost:3000/api/route
+Content-Type: application/json
+
+{
+  "scope": "chatbot_persona",
+  "prompt": "Halo, selamat pagi!",
+  "response_format": "json",
+  "fallback_scope_prompt": "Hello, good morning! (fallback mode)"
+}</pre>
+          </div>
+        </section>
+
+        <!-- ================= KELOLA PROVIDER VIEW ================= -->
+        <section id="view-providers" class="content-view hidden">
+          <div class="view-header">
+            <div>
+              <h2>Kelola Provider (API Keys)</h2>
+              <p>Kelola kredensial penyedia API gratisan Anda.</p>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('providerModal')">+ Tambah Provider</button>
+          </div>
+
+          <div class="table-container">
+            <table class="app-table" id="providerTable">
+              <thead>
+                <tr>
+                  <th>Nama Kunci</th>
+                  <th>Penyedia / Provider</th>
+                  <th>Sharing Limits</th>
+                  <th>Tanggal Ditambahkan</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Data API Keys dipopulasi lewat JS -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ================= KELOLA MODEL VIEW ================= -->
+        <section id="view-models" class="content-view hidden">
+          <div class="view-header">
+            <div>
+              <h2>Kelola Model LLM</h2>
+              <p>Konfigurasi model, urutan prioritas, dan limitasi metrik quota.</p>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('modelModal')">+ Tambah Model</button>
+          </div>
+
+          <div class="table-container">
+            <table class="app-table" id="modelTable">
+              <thead>
+                <tr>
+                  <th>Model Identifier</th>
+                  <th>Kunci API</th>
+                  <th>Pemakaian Rate (Used/Limit)</th>
+                  <th>Pemakaian Token (Used/Limit)</th>
+                  <th>Masa Karantina</th>
+                  <th>Error</th>
+                  <th>Status</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Data Models dipopulasi lewat JS -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ================= KELOLA SCOPE VIEW ================= -->
+        <section id="view-scopes" class="content-view hidden">
+          <div class="view-header">
+            <div>
+              <h2>Kelola Scope & Pemetaan Model</h2>
+              <p>Petakan scope tugas ke model-model tertentu dengan prioritas khusus.</p>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('scopeModal')">+ Tambah Scope</button>
+          </div>
+
+          <div class="table-container">
+            <table class="app-table" id="scopeTable">
+              <thead>
+                <tr>
+                  <th>Nama Scope</th>
+                  <th>Estimated Output Tokens</th>
+                  <th>System Prompt</th>
+                  <th>Fallback Scope</th>
+                  <th>Urutan Prioritas Model (Priority List)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Data Scopes dipopulasi lewat JS -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ================= LOG VIEW ================= -->
+        <section id="view-logs" class="content-view hidden">
+          <div class="view-header">
+            <div>
+              <h2>Log Riwayat Panggilan</h2>
+              <p>Daftar audit pemanggilan model, token, status sukses/gagal, dan klasifikasi error provider secara riil.</p>
+            </div>
+            <button class="btn btn-secondary" onclick="loadLogsData()">🔄 Refresh Log</button>
+          </div>
+
+          <div class="table-container">
+            <table class="app-table" id="logTable">
+              <thead>
+                <tr>
+                  <th>Waktu</th>
+                  <th>Model Identifier</th>
+                  <th>Scope / Fitur</th>
+                  <th>Status</th>
+                  <th>Prompt Tokens</th>
+                  <th>Output Tokens</th>
+                  <th>Respon / Pesan Error Provider</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Data Logs dipopulasi lewat JS -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ================================= MODALS ================================= -->
+
+  <!-- A. MODAL TAMBAH PROVIDER -->
+  <div id="providerModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Tambah Provider API Key Baru</h3>
+        <button class="btn-close" onclick="closeModal('providerModal')">&times;</button>
+      </div>
+      <form id="providerForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="p-name">Nama Deskriptif</label>
+            <input type="text" id="p-name" required placeholder="Contoh: Gemini Free Key #1">
+          </div>
+          <div class="form-group">
+            <label for="p-provider">Penyedia Layanan (Provider)</label>
+            <select id="p-provider" required>
+              <option value="gemini">Google Gemini (AI Studio)</option>
+              <option value="groq">Groq Cloud</option>
+              <option value="openaifree">OpenAI Compatible (SambaNova / OpenRouter / Together)</option>
+              <option value="anthropic">Anthropic Claude</option>
+              <option value="cohere">Cohere API</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="p-key">Secret API Key</label>
+            <input type="password" id="p-key" required placeholder="Masukkan secret key asli">
+          </div>
+          <div class="form-group">
+            <label>Sharing Limits (Centang batasan kuota yang dibagikan antar-model dalam layanan ini)</label>
+            <div class="checkbox-group">
+              <label class="checkbox-label"><input type="checkbox" name="p-limits" value="rpm"> RPM</label>
+              <label class="checkbox-label"><input type="checkbox" name="p-limits" value="rph"> RPH</label>
+              <label class="checkbox-label"><input type="checkbox" name="p-limits" value="rpd" checked> RPD (Rekomendasi)</label>
+              <label class="checkbox-label"><input type="checkbox" name="p-limits" value="rpmo"> RPMO</label>
+              <label class="checkbox-label"><input type="checkbox" name="p-limits" value="tkm"> TKM</label>
+              <label class="checkbox-label"><input type="checkbox" name="p-limits" value="tkh"> TKH</label>
+              <label class="checkbox-label"><input type="checkbox" name="p-limits" value="tkd" checked> TKD (Rekomendasi)</label>
+              <label class="checkbox-label"><input type="checkbox" name="p-limits" value="tkmo"> TKMO</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('providerModal')">Batal</button>
+          <button type="submit" class="btn btn-green">Simpan Provider</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- B. MODAL TAMBAH MODEL -->
+  <div id="modelModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Tambah Model LLM Baru</h3>
+        <button class="btn-close" onclick="closeModal('modelModal')">&times;</button>
+      </div>
+      <form id="modelForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="m-apiKey">Hubungkan ke Kunci API (Provider)</label>
+            <select id="m-apiKey" required>
+              <option value="">-- Pilih API Key --</option>
+              <!-- Dipopulasi lewat JS -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="m-identifier">Model Identifier (Persis seperti parameter API)</label>
+            <input type="text" id="m-identifier" required placeholder="Contoh: gemini-1.5-flash atau llama3-8b-8192">
+          </div>
+          
+          <h4 style="margin: 15px 0 10px 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Konfigurasi Limit Rate</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="m-rpm">Requests Per Minute (RPM)</label>
+              <input type="number" id="m-rpm" min="0" default="0" placeholder="0 = tanpa batas">
+            </div>
+            <div class="form-group">
+              <label for="m-rph">Requests Per Hour (RPH)</label>
+              <input type="number" id="m-rph" min="0" default="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="m-rpd">Requests Per Day (RPD)</label>
+              <input type="number" id="m-rpd" min="0" default="0">
+            </div>
+            <div class="form-group">
+              <label for="m-rpmo">Requests Per Month (RPMO)</label>
+              <input type="number" id="m-rpmo" min="0" default="0">
+            </div>
+          </div>
+
+          <h4 style="margin: 15px 0 10px 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Konfigurasi Limit Token</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="m-tkm">Tokens Per Minute (TKM)</label>
+              <input type="number" id="m-tkm" min="0" default="0">
+            </div>
+            <div class="form-group">
+              <label for="m-tkh">Tokens Per Hour (TKH)</label>
+              <input type="number" id="m-tkh" min="0" default="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="m-tkd">Tokens Per Day (TKD)</label>
+              <input type="number" id="m-tkd" min="0" default="0">
+            </div>
+            <div class="form-group">
+              <label for="m-tkmo">Tokens Per Month (TKMO)</label>
+              <input type="number" id="m-tkmo" min="0" default="0">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modelModal')">Batal</button>
+          <button type="submit" class="btn btn-green">Simpan Model</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- E. MODAL EDIT MODEL -->
+  <div id="editModelModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Edit Model LLM & Status</h3>
+        <button class="btn-close" onclick="closeModal('editModelModal')">&times;</button>
+      </div>
+      <form id="editModelForm">
+        <input type="hidden" id="edit-m-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="edit-m-identifier">Model Identifier</label>
+            <input type="text" id="edit-m-identifier" required>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-m-status">Status Model</label>
+              <select id="edit-m-status" required>
+                <option value="active">Active</option>
+                <option value="quarantined">Quarantined</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edit-m-errorCount">Error Count</label>
+              <input type="number" id="edit-m-errorCount" min="0">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-m-quarantine">Karantina Hingga (Quarantine Until)</label>
+            <input type="datetime-local" id="edit-m-quarantine">
+            <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 4px;">Kosongkan jika tidak dikarantina</small>
+          </div>
+          
+          <h4 style="margin: 15px 0 10px 0; font-size: 0.85rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Konfigurasi Limit Rate</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-m-rpm">RPM</label>
+              <input type="number" id="edit-m-rpm" min="0">
+            </div>
+            <div class="form-group">
+              <label for="edit-m-rph">RPH</label>
+              <input type="number" id="edit-m-rph" min="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-m-rpd">RPD</label>
+              <input type="number" id="edit-m-rpd" min="0">
+            </div>
+            <div class="form-group">
+              <label for="edit-m-rpmo">RPMO</label>
+              <input type="number" id="edit-m-rpmo" min="0">
+            </div>
+          </div>
+
+          <h4 style="margin: 15px 0 10px 0; font-size: 0.85rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Konfigurasi Limit Token</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-m-tkm">TKM</label>
+              <input type="number" id="edit-m-tkm" min="0">
+            </div>
+            <div class="form-group">
+              <label for="edit-m-tkh">TKH</label>
+              <input type="number" id="edit-m-tkh" min="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-m-tkd">TKD</label>
+              <input type="number" id="edit-m-tkd" min="0">
+            </div>
+            <div class="form-group">
+              <label for="edit-m-tkmo">TKMO</label>
+              <input type="number" id="edit-m-tkmo" min="0">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('editModelModal')">Batal</button>
+          <button type="submit" class="btn btn-green">Simpan Perubahan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- C. MODAL TAMBAH SCOPE -->
+  <div id="scopeModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Tambah / Edit Scope Baru</h3>
+        <button class="btn-close" onclick="closeModal('scopeModal')">&times;</button>
+      </div>
+      <form id="scopeForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="s-name">Nama Scope (Unique Identifier)</label>
+            <input type="text" id="s-name" required placeholder="Contoh: chatbot_persona atau embedding_model">
+          </div>
+          <div class="form-group">
+            <label for="s-eto">Estimated Output Tokens (ETO / Buffer Kuota)</label>
+            <input type="number" id="s-eto" required value="400" min="1" placeholder="400">
+          </div>
+          <div class="form-group">
+            <label for="s-prompt">System Prompt</label>
+            <textarea id="s-prompt" rows="3" placeholder="Masukkan instruksi dasar bagi LLM untuk scope ini (opsional)"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="s-fallback">Fallback Scope (Pilih scope cadangan jika seluruh model scope utama penuh)</label>
+            <select id="s-fallback">
+              <option value="">-- Tanpa Fallback Scope --</option>
+              <!-- Dipopulasi lewat JS -->
+            </select>
+          </div>
+
+          <h4 style="margin: 20px 0 10px 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Pemetaan Model & Urutan Prioritas</h4>
+          <div class="form-row" style="align-items: flex-end;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="s-modelSelector">Pilih Model</label>
+              <select id="s-modelSelector">
+                <option value="">-- Pilih Model --</option>
+                <!-- Dipopulasi lewat JS -->
+              </select>
+            </div>
+            <button type="button" class="btn btn-primary" onclick="addModelToScopeList()">Tambahkan ke Scope</button>
+          </div>
+
+          <div class="priority-list-builder">
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px; font-weight: 500;">
+              Daftar model terpilih (Urutan pertama akan dipanggil terlebih dahulu):
+            </p>
+            <div id="scopeModelListContainer">
+              <!-- Baris prioritas ditambahkan secara dinamis oleh JS -->
+              <p class="no-models-msg" style="text-align: center; color: var(--text-muted); padding: 10px; font-size: 0.875rem;">
+                Belum ada model yang dipetakan ke scope ini.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('scopeModal')">Batal</button>
+          <button type="submit" class="btn btn-green">Simpan Scope</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- D. MODAL CEK MODEL (Test Model) -->
+  <div id="testModelModal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 750px;">
+      <div class="modal-header">
+        <h3>Cek Konektivitas Model: <span id="test-model-name" style="font-family: monospace; color: var(--primary-blue);"></span></h3>
+        <button class="btn-close" onclick="closeModal('testModelModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="test-model-id">
+        <div class="form-group">
+          <label>Format Uji (Pilih mode respon yang diinginkan)</label>
+          <div style="display: flex; gap: 12px; margin-top: 6px;">
+            <label class="checkbox-label" style="background: #f1f5f9; padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); width: 50%; justify-content: center;">
+              <input type="radio" name="test-format" value="text" checked style="margin-right: 8px;"> Teks ("Jawab halo saja")
+            </label>
+            <label class="checkbox-label" style="background: #f1f5f9; padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); width: 50%; justify-content: center;">
+              <input type="radio" name="test-format" value="json" style="margin-right: 8px;"> JSON ("Kirim data JSON")
+            </label>
+          </div>
+        </div>
+
+        <button type="button" id="btnRunTest" class="btn btn-primary btn-block" onclick="runModelTest()" style="margin-top: 10px;">⚡ Jalankan Pengujian Model</button>
+
+        <div id="testLoading" class="hidden" style="text-align: center; margin: 25px 0;">
+          <div style="display: inline-block; width: 30px; height: 30px; border: 3px solid rgba(37,99,235,0.2); border-radius: 50%; border-top-color: var(--primary-blue); animation: spin 1s linear infinite;"></div>
+          <p style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">Menghubungi API Provider...</p>
+        </div>
+
+        <div id="testReport" class="hidden" style="margin-top: 25px;">
+          <h4 style="margin-bottom: 12px; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Laporan Hasil Pengujian</h4>
+          
+          <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; width: 50%; text-align: center;">
+              <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">STATUS HTTP</span>
+              <span id="testReportStatus" style="font-size: 1.25rem; font-weight: 700;">200</span>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; width: 50%; text-align: center;">
+              <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">PROMPT RETRY FALLBACK</span>
+              <span id="testReportRetry" class="badge" style="margin-top: 4px;">Tidak</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Respon Teks Model</label>
+            <textarea id="testReportText" readonly rows="4" style="font-family: var(--font-family); background: #f8fafc; font-size: 0.9rem; line-height: 1.4; border-radius: var(--radius-md); cursor: default; resize: vertical;"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Headers Quota / Rate Limit Respons</label>
+            <pre id="testReportHeaders" style="background: #0f172a; color: #38bdf8; padding: 12px; border-radius: var(--radius-md); font-family: monospace; font-size: 0.8rem; max-height: 150px; overflow-y: auto; text-align: left;"></pre>
+          </div>
+
+          <div class="form-group">
+            <label>Sisa Limit di Database Lokal (Local DB Quota)</label>
+            <pre id="testReportLocalQuota" style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 12px; border-radius: var(--radius-md); font-family: monospace; font-size: 0.8rem; text-align: left;"></pre>
+          </div>
+
+          <div class="form-group">
+            <details>
+              <summary style="font-size: 0.85rem; font-weight: 600; color: var(--primary-blue); cursor: pointer; outline: none; margin-bottom: 6px;">Tampilkan Detail Request & Response Mentah (Raw API)</summary>
+              <div style="margin-top: 8px;">
+                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px; text-align: left;">Payload Request Sent:</label>
+                <pre id="testReportRawRequest" style="background: #f1f5f9; color: #334155; padding: 10px; border-radius: var(--radius-sm); font-family: monospace; font-size: 0.775rem; margin-bottom: 12px; overflow-x: auto; max-height: 150px; text-align: left;"></pre>
+                
+                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px; text-align: left;">Raw Response Returned:</label>
+                <pre id="testReportRawResponse" style="background: #f1f5f9; color: #334155; padding: 10px; border-radius: var(--radius-sm); font-family: monospace; font-size: 0.775rem; overflow-x: auto; max-height: 150px; text-align: left;"></pre>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

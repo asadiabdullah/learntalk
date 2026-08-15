@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Learntalk PWA</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#5d6ef7">
+    <link rel="icon" type="image/png" href="assets/logo.png">
+    
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    
+    <!-- AUTHENTICATION VIEW -->
+    <div id="auth-view" class="view-container active">
+        <div class="auth-box">
+            <div class="auth-header">
+                <img src="assets/logo.png" alt="Learntalk Logo" class="auth-logo">
+                <h1>Learntalk</h1>
+                <p>Silakan masuk atau daftar untuk melanjutkan.</p>
+            </div>
+            
+            <form id="auth-form" class="auth-form">
+                <div class="form-group">
+                    <label for="username">Email</label>
+                    <input type="email" id="username" placeholder="Masukkan email Anda" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="Masukkan password" required>
+                </div>
+                
+                <div class="auth-actions">
+                    <button type="button" id="btn-login" class="btn-primary">Masuk</button>
+                    <button type="button" id="btn-register" class="btn-secondary">Daftar Akun Baru</button>
+                </div>
+                <div id="auth-error" class="auth-error hidden">Pesan error di sini</div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN DASHBOARD VIEW (WhatsApp Style) -->
+    <div id="dashboard-view" class="view-container hidden">
+        <div class="app-layout">
+            <!-- Sidebar (Daftar Pesan) -->
+            <aside class="sidebar" id="sidebar">
+                <header class="sidebar-header">
+                    <div class="brand-wrap">
+                        <h2>Learntalk</h2>
+                    </div>
+                    <div class="sidebar-actions">
+                        <button class="icon-button" aria-label="Notifikasi"><i class="fa-solid fa-bell"></i></button>
+                        <button class="icon-button" id="btn-settings" aria-label="Pengaturan" title="Pengaturan"><i class="fa-solid fa-gear"></i></button>
+                        <button class="icon-button" id="btn-logout" aria-label="Keluar" title="Keluar"><i class="fa-solid fa-right-from-bracket"></i></button>
+                    </div>
+                </header>
+
+                <section class="tabs" aria-label="Tab utama">
+                    <button class="tab active">Pesan</button>
+                    <button class="tab">Ujian</button>
+                    <button class="tab">Kartu</button>
+                </section>
+
+                <div class="search-bar-modern">
+                    <div class="search-inner">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" placeholder="Cari percakapan...">
+                    </div>
+                </div>
+
+                <div class="chat-list">
+                    <!-- Chat Items -->
+                    <article class="chat-item active" onclick="openChatMobile()">
+                        <div class="avatar avatar--purple">E</div>
+                        <div class="chat-info">
+                            <div class="chat-meta">
+                                <h3>English Tutor (ROM)</h3>
+                                <time>09:42</time>
+                            </div>
+                            <div class="chat-preview">
+                                <p>Hi! Let's practice speaking today.</p>
+                                <span class="badge">1</span>
+                            </div>
+                        </div>
+                        <div class="chat-item-menu">
+                            <button class="menu-btn" onclick="event.stopPropagation(); toggleMenu('menu-1')"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                            <div class="dropdown-menu" id="menu-1">
+                                <a href="#">Hapus chat</a>
+                                <a href="#">Edit kontak</a>
+                                <a href="#">Sematkan</a>
+                                <a href="#">Tanya leta</a>
+                            </div>
+                        </div>
+                    </article>
+                    
+                    <article class="chat-item" onclick="openChatMobile()">
+                        <div class="avatar avatar--blue">G</div>
+                        <div class="chat-info">
+                            <div class="chat-meta">
+                                <h3>Grammar Bot</h3>
+                                <time>Kemarin</time>
+                            </div>
+                            <div class="chat-preview">
+                                <p>Penjelasan Past Tense sudah dikirim.</p>
+                            </div>
+                        </div>
+                        <div class="chat-item-menu">
+                            <button class="menu-btn" onclick="event.stopPropagation(); toggleMenu('menu-2')"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                            <div class="dropdown-menu" id="menu-2">
+                                <a href="#">Hapus chat</a>
+                                <a href="#">Edit kontak</a>
+                                <a href="#">Sematkan</a>
+                                <a href="#">Tanya leta</a>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+                
+                <button class="fab" aria-label="Chat Baru" onclick="openModal('modal-add-persona')">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </aside>
+
+            <!-- Main Chat Area -->
+            <main class="chat-area" id="chat-area">
+                <header class="chat-header">
+                    <button class="icon-button back-button" id="btn-back-sidebar" onclick="closeChatMobile()"><i class="fa-solid fa-arrow-left"></i></button>
+                    <div class="chat-header-profile">
+                        <div class="avatar avatar--purple">E</div>
+                        <div class="chat-header-info">
+                            <h2>English Tutor (ROM)</h2>
+                            <p>Online (Agnostic Proxy)</p>
+                        </div>
+                    </div>
+                    <div class="chat-header-actions">
+                        <button class="icon-button"><i class="fa-solid fa-phone"></i></button>
+                        <div style="position: relative;">
+                            <button class="icon-button" onclick="event.stopPropagation(); toggleMenu('menu-chat-header')"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                            <div class="dropdown-menu dropdown-right" id="menu-chat-header">
+                                <a href="#">Hapus chat</a>
+                                <a href="#">Edit kontak</a>
+                                <a href="#">Tanya leta</a>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="chat-messages" id="chat-messages">
+                    <!-- Obrolan dinamis akan di-render di sini via JS -->
+                </div>
+
+                <footer class="chat-input-area">
+                    <button class="icon-button" id="btn-toggle-correction" title="Mode Koreksi"><i class="fa-solid fa-spell-check"></i></button>
+                    <div class="input-wrapper">
+                        <textarea id="chat-input" placeholder="Ketik pesan..." rows="1"></textarea>
+                    </div>
+                    <button class="send-button" id="btn-send"><i class="fa-solid fa-paper-plane"></i></button>
+                </footer>
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL TAMBAH KONTAK (PERSONA) -->
+    <div id="modal-add-persona" class="modal-overlay hidden">
+        <div class="modal-container">
+            <header class="modal-header">
+                <h2>Tambah Kontak</h2>
+                <button class="icon-button" onclick="closeModal('modal-add-persona')"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div class="modal-body">
+                <form id="form-add-persona" class="persona-form" data-id="">
+                    <!-- Foto Profil -->
+                    <div class="form-section center-content">
+                        <div class="avatar-upload">
+                            <div class="avatar-preview">
+                                <i class="fa-solid fa-camera"></i>
+                            </div>
+                            <button type="button" class="btn-text">Pilih Foto</button>
+                            <input type="file" id="persona-photo" accept="image/*" hidden>
+                        </div>
+                    </div>
+
+                    <!-- Kategori Pembelajaran -->
+                    <div class="form-section">
+                        <h3>Mari Belajar</h3>
+                        <div class="form-group-row">
+                            <label>Bahasa</label>
+                            <div class="custom-select" id="lang-select">
+                                <div class="select-selected" id="lang-selected" data-value="jp">
+                                    <img src="https://flagcdn.com/w40/jp.png" alt="Japan">
+                                    <i class="fa-solid fa-chevron-down"></i>
+                                </div>
+                                <div class="select-items select-hide" id="lang-options">
+                                    <div data-value="jp"><img src="https://flagcdn.com/w40/jp.png" alt="Japan"></div>
+                                    <div data-value="en"><img src="https://flagcdn.com/w40/gb.png" alt="English"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Kemampuan Bahasa Anda</label>
+                            <select class="form-control" id="input-lang-level">
+                                <option>1 — Pemula</option>
+                                <option>2 — Dasar</option>
+                                <option>3 — Menengah</option>
+                                <option>4 — Mahir</option>
+                                <option>5 — Natural</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Kemampuan Indonesia (Bot)</label>
+                            <select class="form-control" id="input-indo-level">
+                                <option>1 — Sama sekali tidak tahu</option>
+                                <option>2 — Bisa sedikit</option>
+                                <option>3 — Pandai Indonesia</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tujuan</label>
+                            <textarea class="form-control" id="input-goal" rows="2" placeholder="Contoh: Ingin bisa bicara santai dengan teman di Tokyo..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Detail Kontak -->
+                    <div class="form-section">
+                        <h3>Detail Kontak</h3>
+                        <div class="form-group">
+                            <label>Nama <span class="required">*</span></label>
+                            <input type="text" class="form-control" id="input-name" placeholder="Nama Persona" required>
+                        </div>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label>Jenis Kelamin <span class="required">*</span></label>
+                                <select class="form-control" id="input-gender" required>
+                                    <option value="">Pilih</option>
+                                    <option>Pria</option>
+                                    <option>Wanita</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Usia <span class="required">*</span></label>
+                                <input type="number" class="form-control" id="input-age" placeholder="Contoh: 25" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Pekerjaan</label>
+                            <input type="text" class="form-control" id="input-job" placeholder="Contoh: Mahasiswa">
+                        </div>
+                    </div>
+
+                    <!-- Karakter -->
+                    <div class="form-section">
+                        <h3>Karakter</h3>
+                        <div class="form-group">
+                            <label>Deskripsi Latar Belakang</label>
+                            <textarea class="form-control" id="input-desc" rows="2" placeholder="Contoh: Teman sekelas yang suka anime..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Kepribadian</label>
+                            <input type="text" class="form-control" id="input-personality" placeholder="Contoh: Ceria, Ramah, Sabar">
+                        </div>
+                        <div class="form-group">
+                            <label>Cara Bicara (Gaya Bicara)</label>
+                            <select class="form-control" id="input-speech">
+                                <option>Netral</option>
+                                <option>Ramah</option>
+                                <option>Santai</option>
+                                <option>Hangat</option>
+                                <option>Ceria</option>
+                                <option>Playful</option>
+                                <option>Formal</option>
+                                <option>Akademis</option>
+                                <option>Profesional</option>
+                                <option>Conversational / Natural</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <footer class="modal-footer">
+                <button type="button" class="btn-primary w-full" onclick="closeModal('modal-add-persona')">Simpan Kontak</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- MODAL PENGATURAN (BIODATA) -->
+    <div id="modal-settings" class="modal-overlay hidden" style="z-index: 2000;">
+        <div class="modal-container" style="max-width: 650px; height: 500px; display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: 16px;">
+            <header class="modal-header" style="padding: 20px; border-bottom: 1px solid var(--line);">
+                <h2>Pengaturan</h2>
+                <button class="icon-button" onclick="closeModal('modal-settings')"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div class="modal-body" style="padding: 0; display: flex; flex: 1; overflow: hidden;">
+                <!-- Tab Kiri -->
+                <div class="settings-tabs" style="width: 180px; background: var(--surface-soft); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 15px 0;">
+                    <button class="settings-tab-btn active" data-tab="tab-biodata" style="padding: 12px 20px; text-align: left; background: none; border: none; font-weight: 600; cursor: pointer; color: var(--text-soft); border-left: 3px solid transparent; transition: 0.2s; font-size: 0.95rem;">Biodata</button>
+                </div>
+                <!-- Isi Tab Kanan -->
+                <div class="settings-content" style="flex: 1; padding: 25px; overflow-y: auto; background: var(--surface);">
+                    <!-- Tab Biodata -->
+                    <div id="tab-biodata" class="settings-tab-pane">
+                        <h3 style="margin-top: 0; margin-bottom: 20px; font-size: 1.15rem; color: var(--text);">Biodata Pengguna</h3>
+                        <form id="form-biodata">
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem; color: var(--text-soft);">Nama</label>
+                                <input type="text" id="profile-name" class="form-control" placeholder="Nama Anda" required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text);">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem; color: var(--text-soft);">Jenis Kelamin</label>
+                                <select id="profile-gender" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text);">
+                                    <option value="">Pilih</option>
+                                    <option value="Pria">Pria</option>
+                                    <option value="Wanita">Wanita</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem; color: var(--text-soft);">Usia</label>
+                                <input type="number" id="profile-age" class="form-control" placeholder="Contoh: 20" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text);">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem; color: var(--text-soft);">Bahasa Ibu</label>
+                                <input type="text" id="profile-native" class="form-control" value="Indonesia" disabled style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-soft); color: var(--text-soft); cursor: not-allowed;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem; color: var(--text-soft);">Kelemahan Bahasa (Dideteksi AI)</label>
+                                <textarea id="profile-weakness" class="form-control" rows="3" readonly style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-soft); color: var(--text-soft); cursor: not-allowed; resize: none;"></textarea>
+                            </div>
+                            <button type="submit" class="btn-primary w-full" style="width: 100%; padding: 12px; font-weight: 600; border-radius: 8px; border: none; background: var(--primary); color: white; cursor: pointer;">Simpan Biodata</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL TANYA LETA -->
+    <div id="modal-tanya-leta" class="modal-overlay hidden" style="z-index: 2100;">
+        <div class="modal-container" style="max-width: 450px;">
+            <header class="modal-header">
+                <h2>Tanya Leta</h2>
+                <button class="icon-button" onclick="closeModal('modal-tanya-leta')"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div class="modal-body" style="padding: 20px;">
+                <p style="color: var(--text-soft); font-size: 0.9rem; margin-bottom: 15px;">Tanya Leta tentang kata atau kalimat sulit dalam obrolan ini:</p>
+                <div class="form-group">
+                    <textarea id="leta-question" class="form-control" rows="4" placeholder="Contoh: Apa bedanya 'Kore' dan 'Sore'?" style="resize: none;"></textarea>
+                </div>
+                <button class="btn-primary w-full" id="btn-ask-leta" style="margin-top: 15px;">Tanyakan</button>
+                
+                <!-- Dummy Answer Box -->
+                <div id="leta-answer-box" class="hidden" style="margin-top: 20px; padding: 15px; background: var(--surface-soft); border-radius: 8px; border-left: 4px solid var(--primary);">
+                    <h4 style="margin: 0 0 8px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-robot" style="color: var(--primary);"></i> Leta:</h4>
+                    <p id="leta-answer-text" style="margin: 0; font-size: 0.9rem; line-height: 1.4; color: var(--text);"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- POPOVER WORD CARD -->
+    <div id="popover-word-card" class="modal-overlay hidden" style="z-index: 2200; background: rgba(0,0,0,0.25);">
+        <div class="modal-container" style="max-width: 320px; position: relative; border-radius: 20px;">
+            <div class="modal-body" style="padding: 24px; text-align: center;">
+                <button class="icon-button" onclick="closeWordCard()" style="position: absolute; top: 15px; right: 15px; font-size: 0.9rem;"><i class="fa-solid fa-xmark"></i></button>
+                
+                <button class="icon-button" id="btn-star-word" style="position: absolute; top: 15px; left: 15px; font-size: 1.1rem; color: var(--text-soft); transition: 0.2s;"><i class="fa-regular fa-star"></i></button>
+
+                <h1 id="word-card-title" style="font-size: 2.2rem; margin: 25px 0 5px; font-weight: 700; color: var(--text);">Word</h1>
+                <p id="word-card-reading" style="color: var(--text-soft); font-size: 1rem; margin: 0 0 15px; font-style: italic;">Reading</p>
+                
+                <div style="background: var(--surface-soft); padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                    <p id="word-card-meaning" style="font-size: 1.05rem; font-weight: 500; margin: 0; color: var(--text);">Arti kata</p>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 15px;">
+                    <button class="btn-secondary" id="btn-word-prev" style="padding: 8px 16px; font-size: 0.9rem;"><i class="fa-solid fa-chevron-left"></i></button>
+                    <span id="word-card-index" style="font-size: 0.85rem; color: var(--text-soft); font-weight: 600;">1 / 5</span>
+                    <button class="btn-secondary" id="btn-word-next" style="padding: 8px 16px; font-size: 0.9rem;"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOM CONFIRM MODAL -->
+    <div id="modal-confirm" class="modal-overlay hidden" style="z-index: 2000;">
+        <div class="modal-container" style="max-width: 350px;">
+            <div class="modal-body" style="text-align: center; padding: 30px 20px 20px;">
+                <div style="font-size: 3rem; color: #ff4757; margin-bottom: 15px;">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                </div>
+                <h2 style="margin-bottom: 10px; font-size: 1.2rem;" id="confirm-title">Konfirmasi</h2>
+                <p id="confirm-message" style="color: var(--text-soft); font-size: 0.95rem; line-height: 1.4; margin-bottom: 25px;">Apakah Anda yakin?</p>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-secondary w-full" id="btn-confirm-cancel">Batal</button>
+                    <button class="btn-primary w-full" id="btn-confirm-ok" style="background: #ff4757;">Ya, Lanjutkan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST CONTAINER -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <!-- Supabase JS CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

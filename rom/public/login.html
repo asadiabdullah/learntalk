@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - ROM Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="login-body">
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="logo-icon">ROM</div>
+        <h1>ROM Admin</h1>
+        <p>Router and Orchestrator Microservice Portal</p>
+      </div>
+      
+      <form id="loginForm" class="login-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" required placeholder="Masukkan username admin" autocomplete="username">
+        </div>
+        
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" required placeholder="Masukkan password" autocomplete="current-password">
+        </div>
+        
+        <div id="errorMessage" class="error-banner hidden"></div>
+        
+        <button type="submit" class="btn btn-primary btn-block">Masuk ke Dashboard</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Redirect if already logged in
+    if (localStorage.getItem('rom_session_token')) {
+      window.location.href = 'dashboard.html';
+    }
+
+    const loginForm = document.getElementById('loginForm');
+    const errorMessage = document.getElementById('errorMessage');
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMessage.classList.add('hidden');
+      
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          localStorage.setItem('rom_session_token', data.token);
+          localStorage.setItem('rom_admin_user', data.username);
+          window.location.href = 'dashboard.html';
+        } else {
+          errorMessage.textContent = data.message || 'Login gagal, periksa username dan password.';
+          errorMessage.classList.remove('hidden');
+        }
+      } catch (error) {
+        console.error(error);
+        errorMessage.textContent = 'Gagal menghubungi server router.';
+        errorMessage.classList.remove('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
