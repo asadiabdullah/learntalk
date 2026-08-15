@@ -1024,16 +1024,24 @@ fastify.post('/api/route', async (request, reply) => {
 });
 
 // --- SERVER STARTUP ---
-const start = async () => {
-  try {
-    await initializeDatabaseWithRetry();
-    await fastify.listen({ port, host: '0.0.0.0' });
-    console.log(`Server berjalan di http://localhost:${port}`);
-    console.log(`Buka halaman dashboard di http://localhost:${port}/dashboard/login.html`);
-  } catch (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
-};
+if (!process.env.VERCEL) {
+  const start = async () => {
+    try {
+      await initializeDatabaseWithRetry();
+      await fastify.listen({ port, host: '0.0.0.0' });
+      console.log(`Server berjalan di http://localhost:${port}`);
+      console.log(`Buka halaman dashboard di http://localhost:${port}/dashboard/login.html`);
+    } catch (err) {
+      fastify.log.error(err);
+      process.exit(1);
+    }
+  };
+  start();
+}
 
-start();
+// Export handler untuk Vercel Serverless
+export default async function handler(req: any, res: any) {
+  await initializeDatabaseWithRetry();
+  await fastify.ready();
+  fastify.server.emit('request', req, res);
+}
