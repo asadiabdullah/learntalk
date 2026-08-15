@@ -1,0 +1,10 @@
+{
+  "name": "learntalk-monorepo",
+  "version": "1.0.0",
+  "description": "Learntalk monorepo workspace for frontend client and microservice ROM",
+  "scripts": {
+    "dev:client": "npm run dev --prefix client",
+    "dev:rom": "npm run dev --prefix rom",
+    "dev": "npx concurrently -k -p \"[{name}]\" -n \"ROM,CLIENT\" -c \"cyan,magenta\" \"npm run dev:rom\" \"npm run dev:client\""
+  }
+}
