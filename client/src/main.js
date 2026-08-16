@@ -1855,6 +1855,27 @@ async function triggerPersonaAiResponse(userText, isRefresh = false, refreshIdx 
   const historyList = messagesData[activePersonaId] || [];
   const recent10 = historyList.slice(-10).map(m => `${m.sender.toUpperCase()}: ${m.text}`).join("\n");
   
+  const isJp = (p.language || 'jp') === 'jp';
+  const jsonSchemaFormat = isJp ? `
+{
+  "response": "Tanggapan balasan dalam bahasa Jepang",
+  "furigana": "<ruby>おしゃべり<rt>おしゃべり</rt></ruby>しましょう！",
+  "romaji": "Oshaberi shimashou!",
+  "translation": "Mari kita mengobrol!",
+  "tokens": [
+    { "word": "おしゃべり", "reading": "おしゃべり", "romaji": "oshaberi", "meaning": "mengobrol" },
+    { "word": "しましょう", "reading": "しましょう", "romaji": "shimashou", "meaning": "mari kita lakukan" }
+  ]
+}` : `
+{
+  "response": "Response text in English",
+  "translation": "Terjemahan dalam Bahasa Indonesia",
+  "tokens": [
+    { "word": "Let's", "meaning": "Mari", "grammar": "contraction" },
+    { "word": "talk", "meaning": "berbicara", "grammar": "verb" }
+  ]
+}`;
+
   const systemPrompt = `
 <System>
 Role: Play ${p.name}, ${p.age || 25}yo ${p.gender || 'Person'}, job:${p.job || 'tutor'}. Info:${p.description || '-'}. Personality:${p.personality || '-'}. Goal:${p.goal || '-'}.
@@ -1872,7 +1893,8 @@ User: ${userProfile.name}, ${userProfile.age || 20}yo, ${userProfile.gender || '
 <RecentChatHistory>
 ${recent10}
 </RecentChatHistory>
-Respond in character. Output ONLY valid JSON matching schema.
+Respond in character. Output ONLY valid JSON matching this schema:
+${jsonSchemaFormat}
 </System>
 `;
 
@@ -1941,7 +1963,12 @@ User: ${userProfile.name}, ${userProfile.age || 20}yo, ${userProfile.gender || '
 <RecentChatHistory>
 ${recent10}
 </RecentChatHistory>
-Respond in character. Output ONLY valid JSON matching the schema.
+Respond in character. Output ONLY valid JSON matching this schema:
+{
+  "response": "Respons dalam bahasa target",
+  "turn": "1",
+  "point": "7.5"
+}
 </System>
 `;
 
