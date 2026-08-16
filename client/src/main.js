@@ -1653,16 +1653,56 @@ async function callRomOrchestrator(scope, prompt) {
   }
 }
 
-function parseLlmJsonResponse(rawText) {
-  if (typeof rawText === 'object' && rawText !== null) return rawText;
-  let clean = String(rawText || '').trim();
+function extractLlmContent(rawRes) {
+  if (!rawRes) return "";
+  // Unpack OpenAI chat completion format from ROM
+  if (rawRes.choices && Array.isArray(rawRes.choices) && rawRes.choices[0] && rawRes.choices[0].message) {
+    return rawRes.choices[0].message.content || "";
+  }
+  if (typeof rawRes === 'string') return rawRes;
+  if (rawRes.response) return rawRes.response;
+  return JSON.stringify(rawRes);
+}
+
+function parseLlmJsonResponse(rawRes) {
+  const contentStr = extractLlmContent(rawRes);
+  let clean = String(contentStr || '').trim();
   clean = clean.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+  
+  let parsed = null;
   try {
-    return JSON.parse(clean);
+    parsed = JSON.parse(clean);
   } catch (err) {
-    console.warn("Gagal parse JSON LLM, gunakan raw text:", clean);
+    console.warn("Raw LLM output string (bukan JSON):", clean);
     return { response: clean };
   }
+  
+  if (typeof parsed === 'object' && parsed !== null) {
+    // Normalisasi kunci JSON fleksibel (case-insensitive & variasi kata)
+    const textVal = parsed.response || parsed.Response || parsed.respons || parsed.Respons || parsed.Tanggapan || parsed.tanggapan || parsed.text || parsed.Text || "";
+    const translationVal = parsed.translation || parsed.Translation || parsed.terjemahan || parsed.Terjemahan || "";
+    const tokensVal = parsed.tokens || parsed.Tokens || [];
+    const turnVal = parsed.turn || parsed.Turn || null;
+    const pointVal = parsed.point || parsed.Point || parsed.score || parsed.Score || null;
+    const needsCorrVal = parsed.needs_correction !== undefined ? parsed.needs_correction : (parsed.Needs_Correction || false);
+    const corrTextVal = parsed.corrected_text || parsed.Corrected_Text || parsed.correctedText || "";
+    const diffVal = parsed.diff_html || parsed.Diff_Html || "";
+    const explVal = parsed.explanation || parsed.Explanation || "";
+
+    return {
+      response: textVal || clean,
+      translation: translationVal,
+      tokens: tokensVal,
+      turn: turnVal,
+      point: pointVal,
+      needs_correction: needsCorrVal,
+      corrected_text: corrTextVal,
+      diff_html: diffVal,
+      explanation: explVal
+    };
+  }
+  
+  return { response: clean };
 }
 
 // Memuat pesan persona dari Supabase
