@@ -814,7 +814,7 @@ window.loadPersonas = async function() {
     const pinText = p.is_pinned ? "Lepas sematan" : "Sematkan";
     
     const html = `
-      <article class="chat-item" onclick="openChat('${p.id}')">
+      <article class="chat-item" onclick="window.openChat('${p.id}')">
           ${avatarHtml}
           <div class="chat-info">
               <div class="chat-meta">
@@ -833,7 +833,7 @@ window.loadPersonas = async function() {
               <a href="#" onclick="deletePersona('${p.id}'); event.stopPropagation(); return false;">Hapus chat</a>
               <a href="#" onclick="editPersona('${p.id}'); event.stopPropagation(); return false;">Edit kontak</a>
               <a href="#" onclick="togglePinPersona('${p.id}', ${p.is_pinned}); event.stopPropagation(); return false;">${pinText}</a>
-              <a href="#" onclick="event.stopPropagation(); return false;">Tanya leta</a>
+              <a href="#" onclick="openAskLetaModal(); event.stopPropagation(); return false;">Tanya Leta</a>
           </div>
       </article>
     `;
@@ -846,62 +846,68 @@ window.loadExams = async function() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return;
   
-  const { data: exams, error } = await supabase
-    .from('exams')
-    .select('*')
-    .eq('user_id', session.user.id)
-    .order('is_pinned', { ascending: false })
-    .order('created_at', { ascending: false });
-    
-  if (error) {
-    console.error("Gagal memuat ujian:", error);
-    return;
-  }
-  
-  window.examsData = exams;
-  const chatListEl = document.querySelector('.chat-list');
-  chatListEl.innerHTML = '';
-  
-  if (exams.length === 0) {
-    chatListEl.innerHTML = '<p style="text-align:center; color:var(--text-soft); padding: 20px;">Belum ada ujian. Silakan buat ujian baru.</p>';
-    return;
-  }
-  
-  exams.forEach(e => {
-    let avatarHtml = `<div class="avatar avatar--purple">${e.name.charAt(0).toUpperCase()}</div>`;
-    if (e.avatar_url) {
-      avatarHtml = `<img src="${e.avatar_url}" alt="${e.name}" class="avatar" style="object-fit:cover;">`;
+  try {
+    const { data: exams, error } = await supabase
+      .from('exams')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false });
+      
+    if (error) {
+      console.error("Gagal memuat ujian:", error);
+      showToast("Gagal memuat ujian: " + error.message, "error");
+      return;
     }
     
-    const isPinnedStr = e.is_pinned ? `<i class="fa-solid fa-thumbtack" style="font-size:0.7rem; color:var(--text-soft); margin-right:4px;"></i>` : "";
-    const pinText = e.is_pinned ? "Lepas sematan" : "Sematkan";
+    window.examsData = exams;
+    const chatListEl = document.querySelector('.chat-list');
+    chatListEl.innerHTML = '';
     
-    const html = `
-      <article class="chat-item" onclick="openExam('${e.id}')">
-          ${avatarHtml}
-          <div class="chat-info">
-              <div class="chat-meta">
-                  <h3>${isPinnedStr}${e.name}</h3>
-                  <time>${new Date(e.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</time>
-              </div>
-              <div class="chat-preview">
-                  <p>Ketuk untuk memulai simulasi ujian...</p>
-              </div>
-          </div>
-          <button class="menu-btn" onclick="toggleMenu('menu-${e.id}'); event.stopPropagation();">
-              <i class="fa-solid fa-ellipsis-vertical"></i>
-          </button>
-          
-          <div id="menu-${e.id}" class="dropdown-menu">
-              <a href="#" onclick="deleteExam('${e.id}'); event.stopPropagation(); return false;">Hapus ujian</a>
-              <a href="#" onclick="editExam('${e.id}'); event.stopPropagation(); return false;">Edit ujian</a>
-              <a href="#" onclick="togglePinExam('${e.id}', ${e.is_pinned}); event.stopPropagation(); return false;">${pinText}</a>
-              <a href="#" onclick="openViewReportModal('${e.id}'); event.stopPropagation(); return false;">Lihat laporan</a>
-          </div>
-      </article>
-    `;
-    chatListEl.insertAdjacentHTML('beforeend', html);
-  });
+    if (exams.length === 0) {
+      chatListEl.innerHTML = '<p style="text-align:center; color:var(--text-soft); padding: 20px;">Belum ada ujian. Silakan buat ujian baru.</p>';
+      return;
+    }
+    
+    exams.forEach(e => {
+      let avatarHtml = `<div class="avatar avatar--purple">${e.name.charAt(0).toUpperCase()}</div>`;
+      if (e.avatar_url) {
+        avatarHtml = `<img src="${e.avatar_url}" alt="${e.name}" class="avatar" style="object-fit:cover;">`;
+      }
+      
+      const isPinnedStr = e.is_pinned ? `<i class="fa-solid fa-thumbtack" style="font-size:0.7rem; color:var(--text-soft); margin-right:4px;"></i>` : "";
+      const pinText = e.is_pinned ? "Lepas sematan" : "Sematkan";
+      
+      const html = `
+        <article class="chat-item" onclick="window.openExam('${e.id}')">
+            ${avatarHtml}
+            <div class="chat-info">
+                <div class="chat-meta">
+                    <h3>${isPinnedStr}${e.name}</h3>
+                    <time>${new Date(e.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</time>
+                </div>
+                <div class="chat-preview">
+                    <p>Ketuk untuk memulai simulasi ujian...</p>
+                </div>
+            </div>
+            <button class="menu-btn" onclick="toggleMenu('menu-${e.id}'); event.stopPropagation();">
+                <i class="fa-solid fa-ellipsis-vertical"></i>
+            </button>
+            
+            <div id="menu-${e.id}" class="dropdown-menu">
+                <a href="#" onclick="deleteExam('${e.id}'); event.stopPropagation(); return false;">Hapus ujian</a>
+                <a href="#" onclick="editExam('${e.id}'); event.stopPropagation(); return false;">Edit ujian</a>
+                <a href="#" onclick="togglePinExam('${e.id}', ${e.is_pinned}); event.stopPropagation(); return false;">${pinText}</a>
+                <a href="#" onclick="openViewReportModal('${e.id}'); event.stopPropagation(); return false;">Lihat laporan</a>
+            </div>
+        </article>
+      `;
+      chatListEl.insertAdjacentHTML('beforeend', html);
+    });
+  } catch (err) {
+    console.error("Gagal memuat ujian:", err);
+    showToast("Gagal memuat ujian: " + err.message, "error");
+  }
 };
 
 window.deleteExam = async function(id) {
