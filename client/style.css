@@ -1048,3 +1048,52 @@ select.form-control {
   color: var(--primary) !important;
   border-left-color: var(--primary) !important;
 }
+
+/* =========================================
+   INPUT ASSISTANCE PANEL
+========================================= */
+.input-assistance-panel {
+  display: flex;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--surface-soft);
+  border-top: 1px solid var(--line);
+  justify-content: flex-start;
+  align-items: center;
+  transition: all 0.2s ease-in-out;
+}
+.input-assistance-panel.hidden {
+  display: none !important;
+}
+.assistance-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text-soft);
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+.assistance-btn:hover {
+  background: var(--surface-hover);
+  color: var(--primary);
+  border-color: var(--primary-soft);
+}
+.assistance-btn.active {
+  background: var(--primary-soft) !important;
+  color: var(--primary-strong) !important;
+  border-color: var(--primary) !important;
+}
+#btn-toggle-assistance {
+  transition: transform 0.2s ease;
+}
+#btn-toggle-assistance.active {
+  color: var(--primary) !important;
+  transform: rotate(180deg);
+}

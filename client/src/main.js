@@ -783,17 +783,50 @@ const DUMMY_RESPONSES = {
   ]
 };
 
-// Event Listener Mode Koreksi
-const btnCorrection = document.getElementById("btn-toggle-correction");
-if (btnCorrection) {
-  btnCorrection.addEventListener("click", () => {
+// --- LOGIKA ASISTEN INPUT (KOREKSI & TERJEMAH) ---
+let isTranslationActive = false;
+let isAssistanceOpen = false;
+
+const btnToggleAssistance = document.getElementById("btn-toggle-assistance");
+const inputAssistancePanel = document.getElementById("input-assistance");
+const btnAssistCorrection = document.getElementById("btn-assist-correction");
+const btnAssistTranslation = document.getElementById("btn-assist-translation");
+
+if (btnToggleAssistance) {
+  btnToggleAssistance.addEventListener("click", () => {
+    isAssistanceOpen = !isAssistanceOpen;
+    if (isAssistanceOpen) {
+      btnToggleAssistance.classList.add("active");
+      inputAssistancePanel.classList.remove("hidden");
+    } else {
+      btnToggleAssistance.classList.remove("active");
+      inputAssistancePanel.classList.add("hidden");
+    }
+  });
+}
+
+if (btnAssistCorrection) {
+  btnAssistCorrection.addEventListener("click", () => {
     isCorrectionActive = !isCorrectionActive;
     if (isCorrectionActive) {
-      btnCorrection.classList.add("active");
+      btnAssistCorrection.classList.add("active");
       showToast("Mode Koreksi Aktif: Pesan Anda akan dikoreksi sebelum dikirim.", "info");
     } else {
-      btnCorrection.classList.remove("active");
+      btnAssistCorrection.classList.remove("active");
       showToast("Mode Koreksi Dinonaktifkan.", "info");
+    }
+  });
+}
+
+if (btnAssistTranslation) {
+  btnAssistTranslation.addEventListener("click", () => {
+    isTranslationActive = !isTranslationActive;
+    if (isTranslationActive) {
+      btnAssistTranslation.classList.add("active");
+      showToast("Mode Terjemah Aktif: Pesan Anda akan diterjemahkan sebelum dikirim.", "info");
+    } else {
+      btnAssistTranslation.classList.remove("active");
+      showToast("Mode Terjemah Dinonaktifkan.", "info");
     }
   });
 }
@@ -846,10 +879,15 @@ function handleSendMessage() {
   // Masukkan pesan user ke memory cache
   if (!messagesData[activePersonaId]) messagesData[activePersonaId] = [];
   
-  // Jika Mode Koreksi Aktif, kirim dengan notifikasi koreksi dummy
-  const finalMessage = isCorrectionActive 
-    ? `${text} (Telah dikoreksi otomatis)` 
-    : text;
+  // Jika Mode Koreksi / Terjemah Aktif, tambahkan penanda dummy
+  let finalMessage = text;
+  if (isCorrectionActive && isTranslationActive) {
+    finalMessage = `${text} (Telah dikoreksi & diterjemahkan)`;
+  } else if (isCorrectionActive) {
+    finalMessage = `${text} (Telah dikoreksi otomatis)`;
+  } else if (isTranslationActive) {
+    finalMessage = `${text} (Telah diterjemahkan otomatis)`;
+  }
     
   messagesData[activePersonaId].push({
     sender: "user",

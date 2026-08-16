@@ -147,7 +147,7 @@
                             <div class="dropdown-menu dropdown-right" id="menu-chat-header">
                                 <a href="#">Hapus chat</a>
                                 <a href="#">Edit kontak</a>
-                                <a href="#">Tanya leta</a>
+                                <a href="#" onclick="openAskLetaModal(); event.stopPropagation(); return false;">Tanya Leta</a>
                             </div>
                         </div>
                     </div>
@@ -157,8 +157,22 @@
                     <!-- Obrolan dinamis akan di-render di sini via JS -->
                 </div>
 
+                <!-- Input Assistance Panel (Collapsible) -->
+                <div class="input-assistance-panel hidden" id="input-assistance">
+                    <button class="assistance-btn" id="btn-assist-correction" title="Mode Koreksi">
+                        <i class="fa-solid fa-spell-check"></i>
+                        <span>Koreksi</span>
+                    </button>
+                    <button class="assistance-btn" id="btn-assist-translation" title="Mode Terjemah">
+                        <i class="fa-solid fa-language"></i>
+                        <span>Terjemah</span>
+                    </button>
+                </div>
+
                 <footer class="chat-input-area">
-                    <button class="icon-button" id="btn-toggle-correction" title="Mode Koreksi"><i class="fa-solid fa-spell-check"></i></button>
+                    <button class="icon-button" id="btn-toggle-assistance" title="Asisten Input" style="font-size: 1.4rem;">
+                        <i class="fa-solid fa-circle-chevron-up"></i>
+                    </button>
                     <div class="input-wrapper">
                         <textarea id="chat-input" placeholder="Ketik pesan..." rows="1"></textarea>
                     </div>
