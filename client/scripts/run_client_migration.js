@@ -18,7 +18,7 @@ async function run() {
     await client.connect();
     console.log("Connected to Supabase Postgres.");
 
-    const sqlPath = path.join(__dirname, 'create_cards_tables.sql');
+    const sqlPath = path.join(__dirname, 'setup_tables_v3.sql');
     const sql = fs.readFileSync(sqlPath, 'utf8');
 
     console.log("Running migration...");

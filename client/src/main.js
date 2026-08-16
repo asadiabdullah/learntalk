@@ -1630,7 +1630,94 @@ if (btnSend && chatInput) {
   });
 }
 
-function handleSendMessage() {
+// ==========================================
+// KONEKSI ROM ORCHESTRATOR & SUPABASE AI LOGIC
+// ==========================================
+
+// Helper memanggil API Orchestrator ROM
+async function callRomOrchestrator(scope, prompt) {
+  try {
+    const response = await fetch("/api/route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope, prompt })
+    });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP Error ${response.status}`);
+    }
+    return await response.json();
+  } catch (err) {
+    console.error(`ROM Error [scope: ${scope}]:`, err);
+    throw err;
+  }
+}
+
+function parseLlmJsonResponse(rawText) {
+  if (typeof rawText === 'object' && rawText !== null) return rawText;
+  let clean = String(rawText || '').trim();
+  clean = clean.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+  try {
+    return JSON.parse(clean);
+  } catch (err) {
+    console.warn("Gagal parse JSON LLM, gunakan raw text:", clean);
+    return { response: clean };
+  }
+}
+
+// Memuat pesan persona dari Supabase
+async function fetchPersonaMessages(personaId) {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("persona_id", personaId)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data || []).map(m => ({
+      id: m.id,
+      sender: m.sender,
+      text: m.text,
+      corrected_text: m.corrected_text,
+      diff_html: m.diff_html,
+      translation: m.translation,
+      tokens: m.tokens,
+      isPecah: false,
+      isTranslate: false
+    }));
+  } catch (err) {
+    console.error("Gagal memuat pesan persona:", err);
+    return [];
+  }
+}
+
+// Memuat pesan ujian dari Supabase
+async function fetchExamMessages(examId) {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from("exam_messages")
+      .select("*")
+      .eq("exam_id", examId)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data || []).map(m => ({
+      id: m.id,
+      sender: m.sender,
+      text: m.text,
+      turn: m.turn,
+      point: m.point,
+      isPecah: false,
+      isTranslate: false
+    }));
+  } catch (err) {
+    console.error("Gagal memuat pesan ujian:", err);
+    return [];
+  }
+}
+
+async function handleSendMessage() {
   const currentActiveId = activePersonaId || activeExamId;
   if (!currentActiveId) {
     showToast("Silakan pilih kontak obrolan atau simulasi ujian terlebih dahulu.", "error");
@@ -1643,32 +1730,223 @@ function handleSendMessage() {
   // Kosongkan input
   chatInput.value = "";
   
-  // Masukkan pesan user ke memory cache
   if (!messagesData[currentActiveId]) messagesData[currentActiveId] = [];
   
-  // Jika Mode Koreksi / Ingat Aktif, tambahkan penanda dummy (hanya untuk Persona)
-  let finalMessage = text;
+  const sessionData = await supabase?.auth.getSession();
+  const user = sessionData?.data?.session?.user;
+  
   if (activePersonaId) {
-    if (isCorrectionActive && isRememberActive) {
-      finalMessage = `${text} (Telah dikoreksi & ditandai untuk diingat)`;
-    } else if (isCorrectionActive) {
-      finalMessage = `${text} (Telah dikoreksi otomatis)`;
-    } else if (isRememberActive) {
-      finalMessage = `${text} (Telah ditandai untuk diingat)`;
-    }
-  }
+    // Mode Persona Chat
+    let userMsgObj = {
+      sender: "user",
+      text: text,
+      corrected_text: null,
+      diff_html: null
+    };
     
-  messagesData[currentActiveId].push({
-    sender: "user",
-    text: finalMessage
-  });
+    let textToSendToPersona = text;
+    
+    // Jika Mode Koreksi Aktif
+    if (isCorrectionActive) {
+      showToast("Mengecek tatabahasa...", "info");
+      try {
+        const correctionRes = await callRomOrchestrator("koreksi", `Periksa kalimat ini: "${text}"`);
+        const corrData = parseLlmJsonResponse(correctionRes);
+        if (corrData && corrData.needs_correction && corrData.corrected_text) {
+          userMsgObj.corrected_text = corrData.corrected_text;
+          userMsgObj.diff_html = corrData.diff_html || `~~${text}~~ ${corrData.corrected_text}`;
+          textToSendToPersona = corrData.corrected_text;
+          showToast(`Koreksi: ${corrData.explanation || 'Tata bahasa diperbaiki'}`, "warning");
+        }
+      } catch (cErr) {
+        console.warn("Scope koreksi gagal, menggunakan teks asli:", cErr);
+      }
+    }
+    
+    messagesData[activePersonaId].push(userMsgObj);
+    renderActiveMessages();
+    
+    // Simpan pesan user ke Supabase
+    if (user && supabase) {
+      supabase.from("messages").insert([{
+        user_id: user.id,
+        persona_id: activePersonaId,
+        sender: "user",
+        text: text,
+        corrected_text: userMsgObj.corrected_text,
+        diff_html: userMsgObj.diff_html
+      }]).then(({ error }) => {
+        if (error) console.error("Gagal simpan user msg:", error);
+      });
+    }
+    
+    await triggerPersonaAiResponse(textToSendToPersona);
+  } else if (activeExamId) {
+    // Mode Simulasi Ujian
+    const userMsgObj = {
+      sender: "user",
+      text: text
+    };
+    
+    messagesData[activeExamId].push(userMsgObj);
+    renderActiveMessages();
+    
+    // Simpan pesan user ke Supabase
+    if (user && supabase) {
+      supabase.from("exam_messages").insert([{
+        user_id: user.id,
+        exam_id: activeExamId,
+        sender: "user",
+        text: text
+      }]).then(({ error }) => {
+        if (error) console.error("Gagal simpan user exam msg:", error);
+      });
+    }
+    
+    await triggerExamAiResponse(text);
+  }
+}
+
+async function triggerPersonaAiResponse(userText, isRefresh = false, refreshIdx = null) {
+  const p = window.personasData?.find(x => x.id === activePersonaId);
+  if (!p) return;
   
-  renderActiveMessages();
+  const userProfile = window.userProfile || { name: "Pengguna", age: 20, gender: "Pria", language_weakness: "-" };
+  const historyList = messagesData[activePersonaId] || [];
+  const recent10 = historyList.slice(-10).map(m => `${m.sender.toUpperCase()}: ${m.text}`).join("\n");
   
-  // Pemicu Balasan Dummy AI setelah jeda pendek
-  setTimeout(() => {
-    triggerAiResponse();
-  }, 1000);
+  const systemPrompt = `
+<System>
+Role: Play ${p.name}, ${p.age || 25}yo ${p.gender || 'Person'}, job:${p.job || 'tutor'}. Info:${p.description || '-'}. Personality:${p.personality || '-'}. Goal:${p.goal || '-'}.
+<LinguisticRules>
+- TargetLang: ${p.language || 'jp'}. Level instructions: ${p.lang_level || 'General'}
+- Indonesian comprehension: ${p.indo_level || 'Basic'}
+- Tone/Style: ${p.speech_style || 'Neutral'}
+</LinguisticRules>
+<UserContext>
+User: ${userProfile.name}, ${userProfile.age || 20}yo, ${userProfile.gender || 'User'}. Weakness: ${userProfile.language_weakness || '-'}.
+</UserContext>
+<RelevantPastMemories>
+-
+</RelevantPastMemories>
+<RecentChatHistory>
+${recent10}
+</RecentChatHistory>
+Respond in character. Output ONLY valid JSON matching schema.
+</System>
+`;
+
+  showToast("Menunggu balasan AI...", "info");
+  try {
+    const rawRes = await callRomOrchestrator("persona", systemPrompt);
+    const aiData = parseLlmJsonResponse(rawRes);
+    
+    const aiMsgObj = {
+      sender: "ai",
+      text: aiData.response || "Tanggapan tidak tersedia.",
+      translation: aiData.translation || "",
+      tokens: aiData.tokens || [],
+      isPecah: false,
+      isTranslate: false
+    };
+    
+    if (isRefresh && refreshIdx !== null) {
+      messagesData[activePersonaId][refreshIdx] = aiMsgObj;
+    } else {
+      messagesData[activePersonaId].push(aiMsgObj);
+    }
+    
+    renderActiveMessages();
+    
+    // Simpan AI response ke Supabase
+    const sessionData = await supabase?.auth.getSession();
+    const user = sessionData?.data?.session?.user;
+    if (user && supabase) {
+      supabase.from("messages").insert([{
+        user_id: user.id,
+        persona_id: activePersonaId,
+        sender: "ai",
+        text: aiMsgObj.text,
+        translation: aiMsgObj.translation,
+        tokens: aiMsgObj.tokens
+      }]).then(({ error }) => {
+        if (error) console.error("Gagal simpan AI msg:", error);
+      });
+    }
+  } catch (err) {
+    console.error("Gagal mendapatkan respons Persona AI:", err);
+    showToast("Gagal terhubung ke AI Persona.", "error");
+  }
+}
+
+async function triggerExamAiResponse(userText) {
+  const e = window.examsData?.find(x => x.id === activeExamId);
+  if (!e) return;
+  
+  const userProfile = window.userProfile || { name: "Pengguna", age: 20, gender: "Pria", language_weakness: "-" };
+  const historyList = messagesData[activeExamId] || [];
+  const recent10 = historyList.slice(-10).map(m => `${m.sender.toUpperCase()}: ${m.text}`).join("\n");
+  
+  const systemPrompt = `
+<System>
+Role: Play as the character under the condition ${e.condition}. Goal: ${e.goal || '-'}. You will provide a score in the given JSON schema indicating how closely the conversation aligns with the intended goal. The score is normally 1-10, where 10 means the goal has been fully achieved. The score may exceed 10 if the conversation has gone beyond the intended goal or achieved more than what was expected. Do not cap the score at 10 when the conversation meaningfully surpasses the goal.
+<LinguisticRules>
+- TargetLang: ${e.language || 'jp'}. Level instructions: ${e.lang_level || 'General'}
+- Indonesian comprehension: ${e.indo_level || 'Basic'}
+- Tone/Style: ${e.speech_style || 'Neutral'}
+</LinguisticRules>
+<UserContext>
+User: ${userProfile.name}, ${userProfile.age || 20}yo, ${userProfile.gender || 'User'}. Weakness: ${userProfile.language_weakness || '-'}.
+</UserContext>
+<RecentChatHistory>
+${recent10}
+</RecentChatHistory>
+Respond in character. Output ONLY valid JSON matching the schema.
+</System>
+`;
+
+  showToast("Menilai tanggapan ujian...", "info");
+  try {
+    const rawRes = await callRomOrchestrator("ujian", systemPrompt);
+    const examData = parseLlmJsonResponse(rawRes);
+    
+    const aiMsgObj = {
+      sender: "ai",
+      text: examData.response || "...",
+      turn: examData.turn || null,
+      point: examData.point || null,
+      isPecah: false,
+      isTranslate: false
+    };
+    
+    messagesData[activeExamId].push(aiMsgObj);
+    renderActiveMessages();
+    
+    // Update badge skor di header
+    if (examData.point) {
+      const scoreBadge = document.getElementById("exam-score-badge");
+      if (scoreBadge) scoreBadge.textContent = examData.point;
+    }
+    
+    // Simpan AI exam msg ke Supabase
+    const sessionData = await supabase?.auth.getSession();
+    const user = sessionData?.data?.session?.user;
+    if (user && supabase) {
+      supabase.from("exam_messages").insert([{
+        user_id: user.id,
+        exam_id: activeExamId,
+        sender: "ai",
+        text: aiMsgObj.text,
+        turn: aiMsgObj.turn ? parseInt(aiMsgObj.turn) : null,
+        point: aiMsgObj.point ? parseFloat(aiMsgObj.point) : null
+      }]).then(({ error }) => {
+        if (error) console.error("Gagal simpan AI exam msg:", error);
+      });
+    }
+  } catch (err) {
+    console.error("Gagal mendapatkan respons Ujian AI:", err);
+    showToast("Gagal terhubung ke AI Ujian.", "error");
+  }
 }
 
 window.revealChatArea = function() {
@@ -1686,16 +1964,15 @@ window.revealChatArea = function() {
   if (chatInputArea) chatInputArea.classList.remove("hidden");
 };
 
-window.openChat = function(id) {
+window.openChat = async function(id) {
   activePersonaId = id;
   activeExamId = null;
   const p = window.personasData.find(x => x.id === id);
   if (!p) return;
   
-  console.log("Membuka chat dengan ID:", id);
+  console.log("Membuka chat persona ID:", id);
   window.revealChatArea();
   
-  // Render header kontak secara dinamis ke dalam #chat-header-profile
   const headerProfile = document.getElementById("chat-header-profile");
   if (headerProfile) {
     const avatarHtml = p.avatar_url
@@ -1710,19 +1987,20 @@ window.openChat = function(id) {
     `;
   }
   
-  // Update menu dropdown: item ketiga = Tanya Leta
   const thirdAction = document.getElementById("menu-chat-header-third-action");
   if (thirdAction) {
     thirdAction.textContent = "Tanya Leta";
     thirdAction.setAttribute("onclick", "openAskLetaModal(); event.stopPropagation(); return false;");
   }
 
-  // Tampilkan Asisten Input
   const btnToggleAssistance = document.getElementById("btn-toggle-assistance");
   if (btnToggleAssistance) btnToggleAssistance.style.display = "grid";
   
-  // Muat riwayat pesan dari cache, atau isi dengan pesan sambutan dummy jika kosong
-  if (!messagesData[activePersonaId]) {
+  showToast("Memuat obrolan...", "info");
+  const loadedMessages = await fetchPersonaMessages(id);
+  if (loadedMessages.length > 0) {
+    messagesData[id] = loadedMessages;
+  } else {
     const lang = p.language || "jp";
     const initialText = lang === 'en' ? "Hello! Let's practice speaking today." : "こんにちは！一緒に日本語を練習しましょう。";
     const initialTranslation = lang === 'en' ? "Halo! Mari kita latihan berbicara hari ini." : "Halo! Mari kita bersama-sama melatih bahasa Jepang.";
@@ -1742,7 +2020,7 @@ window.openChat = function(id) {
           { word: "練習しましょう", reading: "Renshuu shimashou", meaning: "Mari kita latihan" }
         ];
         
-    messagesData[activePersonaId] = [
+    messagesData[id] = [
       {
         sender: "ai",
         text: initialText,
@@ -1757,16 +2035,15 @@ window.openChat = function(id) {
   openChatMobile();
 };
 
-window.openExam = function(id) {
+window.openExam = async function(id) {
   activePersonaId = null;
   activeExamId = id;
   const e = window.examsData.find(x => x.id === id);
   if (!e) return;
   
-  console.log("Membuka ujian dengan ID:", id);
+  console.log("Membuka ujian ID:", id);
   window.revealChatArea();
   
-  // Render header ujian secara dinamis ke dalam #chat-header-profile
   const headerProfile = document.getElementById("chat-header-profile");
   if (headerProfile) {
     const avatarHtml = e.avatar_url
@@ -1776,28 +2053,34 @@ window.openExam = function(id) {
       ${avatarHtml}
       <div class="chat-header-info" style="margin-left:12px;">
         <h2>${e.name}</h2>
-        <p>Online (Ujian ${e.language === 'en' ? 'Inggris' : 'Jepang'})</p>
+        <p id="exam-header-score">Online (Ujian ${e.language === 'en' ? 'Inggris' : 'Jepang'}) • Skor: <span id="exam-score-badge" style="font-weight:700; color:var(--primary);">0</span></p>
       </div>
     `;
   }
 
-  // Update menu dropdown: item ketiga = Lihat Laporan
   const thirdAction = document.getElementById("menu-chat-header-third-action");
   if (thirdAction) {
     thirdAction.textContent = "Lihat Laporan";
     thirdAction.setAttribute("onclick", `openViewReportModal('${id}'); event.stopPropagation(); return false;`);
   }
 
-  // Sembunyikan Asisten Input & Chevron (Ujian tidak punya mode koreksi/ingat)
   const btnToggleAssistance = document.getElementById("btn-toggle-assistance");
   const inputAssistancePanel = document.getElementById("input-assistance");
   if (btnToggleAssistance) btnToggleAssistance.style.display = "none";
   if (inputAssistancePanel) inputAssistancePanel.classList.add("hidden");
   
-  // Muat riwayat pesan dari cache
-  if (!messagesData[activeExamId]) {
+  showToast("Memuat sesi ujian...", "info");
+  const loadedMessages = await fetchExamMessages(id);
+  if (loadedMessages.length > 0) {
+    messagesData[id] = loadedMessages;
+    const lastAiMsg = [...loadedMessages].reverse().find(m => m.sender === 'ai' && m.point);
+    if (lastAiMsg) {
+      const scoreBadge = document.getElementById("exam-score-badge");
+      if (scoreBadge) scoreBadge.textContent = lastAiMsg.point;
+    }
+  } else {
     const initialText = `[SIMULASI UJIAN MULAI]\n\nKondisi: ${e.condition}\n\nPersona Bot: ${e.persona}\n\nTujuan Anda: ${e.goal || '-'}`;
-    messagesData[activeExamId] = [
+    messagesData[id] = [
       {
         sender: "ai",
         text: initialText,
@@ -1812,16 +2095,51 @@ window.openExam = function(id) {
   openChatMobile();
 };
 
-window.openViewReportModal = function(examId) {
-  const e = window.examsData.find(x => x.id === examId);
-  if (!e) return;
+window.openViewReportModal = async function(id) {
+  const isExam = !activePersonaId && activeExamId;
+  const currentId = id || activePersonaId || activeExamId;
+  const entity = isExam 
+    ? window.examsData?.find(x => x.id === currentId)
+    : window.personasData?.find(x => x.id === currentId);
+    
+  if (!entity) return;
   
-  document.getElementById("report-exam-name").textContent = e.name;
-  document.getElementById("report-score").textContent = "85 / 100";
-  document.getElementById("report-feedback").textContent = `Tata bahasa Anda secara keseluruhan sudah baik dalam simulasi "${e.name}". Anda berhasil melakukan percakapan sesuai kondisi: "${e.condition}".`;
-  document.getElementById("report-recommendation").textContent = "Teruslah berlatih untuk mengasah kosakata spontan Anda.";
-  
+  document.getElementById("report-exam-name").textContent = entity.name;
+  document.getElementById("report-score").textContent = "Memproses...";
+  document.getElementById("report-feedback").textContent = "Sedang menganalisis kelemahan dan performa Anda...";
+  document.getElementById("report-recommendation").textContent = "Memuat...";
   openModal('modal-view-report');
+  
+  const historyList = messagesData[currentId] || [];
+  const sampleChat = historyList.slice(-10).map(m => `${m.sender.toUpperCase()}: ${m.text}`).join("\n");
+  
+  const raportPrompt = `
+Menganalisis performa belajar bahasa ${entity.language || 'jp'} untuk sesi "${entity.name}".
+Riwayat Obrolan:
+${sampleChat}
+
+Berikan laporan evaluasi ringkas dan tips rekomendasi pembelajaran.
+`;
+
+  try {
+    const rawRes = await callRomOrchestrator("raport", raportPrompt);
+    const reportText = typeof rawRes === 'string' ? rawRes : (rawRes.response || JSON.stringify(rawRes));
+    
+    document.getElementById("report-score").textContent = isExam ? "Hasil Evaluasi AI" : "Analisis Kelemahan";
+    document.getElementById("report-feedback").textContent = reportText;
+    document.getElementById("report-recommendation").textContent = "Teruskan latihan secara rutin untuk meningkatkan kelancaran percakapan.";
+    
+    if (supabase && window.userProfile) {
+      const sessionData = await supabase.auth.getSession();
+      const user = sessionData?.data?.session?.user;
+      if (user) {
+        supabase.from("user_profiles").update({ language_weakness: reportText.substring(0, 500) }).eq("id", user.id);
+        window.userProfile.language_weakness = reportText.substring(0, 500);
+      }
+    }
+  } catch (err) {
+    document.getElementById("report-feedback").textContent = "Gagal memuat evaluasi AI: " + err.message;
+  }
 };
 
 // Render daftar pesan
@@ -1836,10 +2154,12 @@ function renderActiveMessages() {
   list.forEach((m, idx) => {
     if (m.sender === "user") {
       // Render balon chat User
+      const diffMarkup = m.diff_html ? `<div style="font-size:0.85rem; color:var(--warning); margin-bottom:4px; font-weight:500;">${m.diff_html}</div>` : "";
       const userHtml = `
         <div class="message-group me">
             <div class="avatar avatar--user">U</div>
             <div class="message-bubble">
+                ${diffMarkup}
                 <p>${m.text}</p>
                 <span class="time">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
             </div>
@@ -1870,12 +2190,10 @@ function renderActiveMessages() {
         textContent = `<div class="word-tokens-container">${tokensHtml}</div>`;
       }
       
-      // Tampilkan terjemahan jika aktif (hanya untuk mode biasa)
       const translationHtml = (activePersonaId && m.translation) 
         ? `<div class="translation-text ${m.isTranslate ? 'visible' : ''}">${m.translation}</div>`
         : "";
         
-      // Tampilkan aksi tombol (hanya untuk mode biasa)
       const actionsHtml = activePersonaId 
         ? `
         <div class="message-actions">
@@ -1886,7 +2204,11 @@ function renderActiveMessages() {
           <button onclick="openAskLetaModal()" title="Tanya Leta"><i class="fa-solid fa-robot"></i></button>
         </div>
         `
-        : "";
+        : `
+        <div class="message-actions">
+          <button onclick="playDummyAudio(this)" title="Suara"><i class="fa-solid fa-volume-high"></i></button>
+        </div>
+        `;
       
       const aiHtml = `
         <div class="message-group">
@@ -1903,37 +2225,7 @@ function renderActiveMessages() {
     }
   });
   
-  // Auto-scroll ke paling bawah obrolan
   container.scrollTop = container.scrollHeight;
-}
-
-// Simulasi balasan Persona AI / Exam Bot
-function triggerAiResponse() {
-  const currentActiveId = activePersonaId || activeExamId;
-  if (!currentActiveId) return;
-  
-  let lang = "jp";
-  if (activePersonaId) {
-    const p = window.personasData?.find(x => x.id === activePersonaId);
-    if (p) lang = p.language || "jp";
-  } else {
-    const e = window.examsData?.find(x => x.id === activeExamId);
-    if (e) lang = e.language || "jp";
-  }
-  
-  const sourceList = DUMMY_RESPONSES[lang] || [];
-  const randomResp = sourceList[Math.floor(Math.random() * sourceList.length)];
-  
-  messagesData[currentActiveId].push({
-    sender: "ai",
-    text: randomResp.text,
-    translation: randomResp.translation,
-    tokens: JSON.parse(JSON.stringify(randomResp.tokens || [])),
-    isPecah: false,
-    isTranslate: false
-  });
-  
-  renderActiveMessages();
 }
 
 // Aksi: Terjemahan
@@ -1954,42 +2246,85 @@ window.togglePecahKata = function(msgIdx) {
   }
 };
 
-// Aksi: Refresh respons
-window.refreshMessage = function(msgIdx) {
-  const p = window.personasData.find(x => x.id === activePersonaId);
-  if (!p) return;
-  const lang = p.language || "jp";
-  const sourceList = DUMMY_RESPONSES[lang] || [];
+// Aksi: Refresh respons (Menghubungi scope persona ROM)
+window.refreshMessage = async function(msgIdx) {
+  if (!activePersonaId) return;
+  const history = messagesData[activePersonaId];
+  if (!history || !history[msgIdx]) return;
   
-  const randomResp = sourceList[Math.floor(Math.random() * sourceList.length)];
-  messagesData[activePersonaId][msgIdx] = {
-    sender: "ai",
-    text: randomResp.text,
-    translation: randomResp.translation,
-    tokens: JSON.parse(JSON.stringify(randomResp.tokens)),
-    isPecah: false,
-    isTranslate: false
-  };
-  renderActiveMessages();
+  showToast("Meminta balasan ulang dari AI...", "info");
+  const lastUserText = history[msgIdx - 1]?.text || "";
+  await triggerPersonaAiResponse(lastUserText, true, msgIdx);
   showToast("Respons berhasil dimuat ulang.", "success");
 };
 
-// Aksi: Suara (dummy highlight)
+// Aksi: Suara menggunakan Browser SpeechSynthesis API
 window.playDummyAudio = function(btn) {
-  btn.style.color = "var(--success)";
-  showToast("Memutar audio percakapan...", "info");
-  setTimeout(() => {
-    btn.style.color = "";
-  }, 1500);
+  const currentActiveId = activePersonaId || activeExamId;
+  const list = messagesData[currentActiveId] || [];
+  const lastAiMsg = [...list].reverse().find(m => m.sender === 'ai');
+  const textToSpeak = lastAiMsg ? lastAiMsg.text : "";
+  
+  if (!textToSpeak) {
+    showToast("Tidak ada teks untuk disuarakan.", "warning");
+    return;
+  }
+  
+  let langCode = 'ja-JP';
+  if (activePersonaId) {
+    const p = window.personasData?.find(x => x.id === activePersonaId);
+    if (p && p.language === 'en') langCode = 'en-US';
+  } else {
+    const e = window.examsData?.find(x => x.id === activeExamId);
+    if (e && e.language === 'en') langCode = 'en-US';
+  }
+  
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(textToSpeak);
+    u.lang = langCode;
+    window.speechSynthesis.speak(u);
+    showToast("Memutar audio percakapan...", "info");
+  } else {
+    showToast("Browser tidak mendukung Web Speech API.", "error");
+  }
 };
 
 // Aksi: Buka Modal Tanya Leta
 window.openAskLetaModal = function() {
-  // Reset input dan answer
   document.getElementById("leta-question").value = "";
   document.getElementById("leta-answer-box").classList.add("hidden");
   openModal('modal-tanya-leta');
 };
+
+// Handler Submit Tanya Leta ke ROM Scope Leta
+const btnAskLetaSubmit = document.getElementById("btn-ask-leta");
+if (btnAskLetaSubmit) {
+  btnAskLetaSubmit.addEventListener("click", async () => {
+    const question = document.getElementById("leta-question").value.trim();
+    if (!question) {
+      alert("Tuliskan pertanyaan Anda terlebih dahulu.");
+      return;
+    }
+    
+    btnAskLetaSubmit.disabled = true;
+    btnAskLetaSubmit.textContent = "Berpikir...";
+    
+    try {
+      const letaPrompt = `Pertanyaan Pengguna: "${question}"\nJelaskan dalam bahasa Indonesia dengan jelas dan berikan contoh kalimatnya.`;
+      const res = await callRomOrchestrator("leta", letaPrompt);
+      const answerText = typeof res === 'string' ? res : (res.response || JSON.stringify(res));
+      
+      document.getElementById("leta-answer-text").textContent = answerText;
+      document.getElementById("leta-answer-box").classList.remove("hidden");
+    } catch (err) {
+      alert("Gagal bertanya kepada Leta: " + err.message);
+    } finally {
+      btnAskLetaSubmit.disabled = false;
+      btnAskLetaSubmit.textContent = "Tanyakan";
+    }
+  });
+}
 
 // POPOVER WORD CARD CONTROLLER
 window.openWordCard = function(msgIdx, tokenIdx) {
