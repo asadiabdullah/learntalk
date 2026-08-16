@@ -55,6 +55,7 @@ CREATE TABLE models (
     quarantine_until TIMESTAMP WITH TIME ZONE DEFAULT NULL,
     error_count INTEGER DEFAULT 0,
     status VARCHAR(50) DEFAULT 'active', -- active, quarantined, inactive
+    model_type VARCHAR(100) NOT NULL CHECK (model_type IN ('embedding', 'text_out', 'text_to_speech', 'audio_native_dialog', 'translator')),
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

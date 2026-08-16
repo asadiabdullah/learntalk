@@ -317,16 +317,16 @@ fastify.get('/api/models', async (request, reply) => {
 // 5. POST /api/models
 fastify.post('/api/models', async (request, reply) => {
   const body = request.body as any;
-  const { api_key_id, model_identifier, rpm, rph, rpd, rpmo, tkm, tkh, tkd, tkmo } = body;
-  if (!api_key_id || !model_identifier) {
+  const { api_key_id, model_identifier, model_type, rpm, rph, rpd, rpmo, tkm, tkh, tkd, tkmo } = body;
+  if (!api_key_id || !model_identifier || !model_type) {
     reply.status(400);
-    return { error: 'API Key ID dan Model Identifier wajib diisi!' };
+    return { error: 'API Key ID, Model Identifier, dan Model Type wajib diisi!' };
   }
   try {
     const result = await pool.query(
-      `INSERT INTO models (api_key_id, model_identifier, rpm, rph, rpd, rpmo, tkm, tkh, tkd, tkmo) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [api_key_id, model_identifier, parseInt(rpm || 0), parseInt(rph || 0), parseInt(rpd || 0), parseInt(rpmo || 0), parseInt(tkm || 0), parseInt(tkh || 0), parseInt(tkd || 0), parseInt(tkmo || 0)]
+      `INSERT INTO models (api_key_id, model_identifier, model_type, rpm, rph, rpd, rpmo, tkm, tkh, tkd, tkmo) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [api_key_id, model_identifier, model_type, parseInt(rpm || 0), parseInt(rph || 0), parseInt(rpd || 0), parseInt(rpmo || 0), parseInt(tkm || 0), parseInt(tkh || 0), parseInt(tkd || 0), parseInt(tkmo || 0)]
     );
     return result.rows[0];
   } catch (error) {
@@ -339,14 +339,18 @@ fastify.post('/api/models', async (request, reply) => {
 fastify.put('/api/models/:id', async (request, reply) => {
   const { id } = request.params as any;
   const body = request.body as any;
-  const { model_identifier, rpm, rph, rpd, rpmo, tkm, tkh, tkd, tkmo, status, quarantine_until, error_count } = body;
+  const { model_identifier, model_type, rpm, rph, rpd, rpmo, tkm, tkh, tkd, tkmo, status, quarantine_until, error_count } = body;
+  if (!model_type) {
+    reply.status(400);
+    return { error: 'Model Type wajib diisi!' };
+  }
   try {
     const qUntil = quarantine_until ? new Date(quarantine_until) : null;
     const result = await pool.query(
       `UPDATE models 
-       SET model_identifier = $1, rpm = $2, rph = $3, rpd = $4, rpmo = $5, tkm = $6, tkh = $7, tkd = $8, tkmo = $9, status = $10, quarantine_until = $11, error_count = $12 
-       WHERE id = $13 RETURNING *`,
-      [model_identifier, parseInt(rpm || 0), parseInt(rph || 0), parseInt(rpd || 0), parseInt(rpmo || 0), parseInt(tkm || 0), parseInt(tkh || 0), parseInt(tkd || 0), parseInt(tkmo || 0), status || 'active', qUntil, parseInt(error_count || 0), id]
+       SET model_identifier = $1, model_type = $2, rpm = $3, rph = $4, rpd = $5, rpmo = $6, tkm = $7, tkh = $8, tkd = $9, tkmo = $10, status = $11, quarantine_until = $12, error_count = $13 
+       WHERE id = $14 RETURNING *`,
+      [model_identifier, model_type, parseInt(rpm || 0), parseInt(rph || 0), parseInt(rpd || 0), parseInt(rpmo || 0), parseInt(tkm || 0), parseInt(tkh || 0), parseInt(tkd || 0), parseInt(tkmo || 0), status || 'active', qUntil, parseInt(error_count || 0), id]
     );
     return result.rows[0];
   } catch (error) {
@@ -456,26 +460,77 @@ fastify.post('/api/models/test', async (request, reply) => {
     const decryptedKey = decrypt(currentModel.secret_key);
     const baseUrl = getBaseUrl(currentModel.provider);
     const config = getProviderConfig(currentModel.provider);
-    const url = `${baseUrl}${config.endpoint(currentModel.model_identifier, false)}`;
+    const modelType = currentModel.model_type || 'text_out';
+    const isJsonFormat = format === 'json';
 
-    let promptText = format === 'json' 
-      ? 'Kirimkan data JSON dengan format: { "status": "sukses", "message": "halo" }'
-      : 'Jawab halo saja.';
-    let promptTokens = countTokens(promptText);
+    let url = '';
+    let headers = config.headers(decryptedKey);
+    let payload: any = {};
+    let promptText = '';
+    let promptTokens = 0;
 
-    const unifiedRequest: UnifiedRequest = {
-      model: currentModel.model_identifier,
-      messages: [{ role: 'user', content: promptText }],
-      temperature: 0.2,
-      max_tokens: 250,
-      stream: false,
-      response_format: format
-    };
+    // --- SETUP REQUEST BERDASARKAN MODEL_TYPE ---
+    if (modelType === 'embedding') {
+      if (currentModel.provider === 'gemini') {
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel.model_identifier}:embedContent?key=${decryptedKey}`;
+        payload = { content: { parts: [{ text: "Test embedding content" }] } };
+        delete headers['Authorization'];
+      } else {
+        url = `${baseUrl}/v1/embeddings`;
+        payload = { input: "Test embedding content", model: currentModel.model_identifier };
+      }
+      promptTokens = countTokens("Test embedding content");
+    } 
+    else if (modelType === 'text_to_speech') {
+      if (currentModel.provider === 'gemini') {
+        url = `${baseUrl}/v1/models/${currentModel.model_identifier}`; // Fallback model info
+        payload = {};
+      } else {
+        url = `${baseUrl}/v1/audio/speech`;
+        payload = { model: currentModel.model_identifier, input: "Test speech generation output", voice: "alloy" };
+      }
+      promptTokens = countTokens("Test speech generation output");
+    }
+    else if (modelType === 'audio_native_dialog') {
+      url = `${baseUrl}/v1/chat/completions`; // Fallback standard chatcompletion
+      const unifiedRequest: UnifiedRequest = {
+        model: currentModel.model_identifier,
+        messages: [{ role: 'user', content: 'Say hello' }],
+        temperature: 0.2, max_tokens: 50, stream: false
+      };
+      payload = config.mapRequest(unifiedRequest, true);
+      promptTokens = countTokens("Say hello");
+    }
+    else if (modelType === 'translator') {
+      url = `${baseUrl}/v1/chat/completions`; // Fallback standard chatcompletion
+      const unifiedRequest: UnifiedRequest = {
+        model: currentModel.model_identifier,
+        messages: [{ role: 'user', content: 'Translate: Hello' }],
+        temperature: 0.2, max_tokens: 50, stream: false
+      };
+      payload = config.mapRequest(unifiedRequest, true);
+      promptTokens = countTokens("Translate: Hello");
+    }
+    else {
+      // Default: 'text_out'
+      url = `${baseUrl}${config.endpoint(currentModel.model_identifier, false)}`;
+      promptText = isJsonFormat 
+        ? 'Kirimkan data JSON dengan format: { "status": "sukses", "message": "halo" }'
+        : 'Jawab halo saja.';
+      promptTokens = countTokens(promptText);
 
-    const headers = config.headers(decryptedKey);
-    let payload = config.mapRequest(unifiedRequest, true);
+      const unifiedRequest: UnifiedRequest = {
+        model: currentModel.model_identifier,
+        messages: [{ role: 'user', content: promptText }],
+        temperature: 0.2,
+        max_tokens: 250,
+        stream: false,
+        response_format: format
+      };
+      payload = config.mapRequest(unifiedRequest, true);
+    }
+
     let rawResult: any = {};
-
     let response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
     let statusCode = response.status;
     let responseHeaders: Record<string, string> = {};
@@ -485,21 +540,31 @@ fastify.post('/api/models/test', async (request, reply) => {
       }
     });
 
-    let responseBodyText = await response.text();
+    let responseBodyText = '';
     let parsedBody: any = {};
-    try { 
-      parsedBody = JSON.parse(responseBodyText); 
+
+    if (modelType === 'text_to_speech' && response.ok && currentModel.provider !== 'gemini') {
+      const buffer = await response.arrayBuffer();
+      responseBodyText = `[Audio binary data, length: ${buffer.byteLength} bytes]`;
+      parsedBody = { info: 'Audio generated successfully', size_bytes: buffer.byteLength };
       rawResult = parsedBody;
-    } catch { 
-      parsedBody = { rawText: responseBodyText }; 
-      rawResult = parsedBody;
+    } else {
+      responseBodyText = await response.text();
+      try { 
+        parsedBody = JSON.parse(responseBodyText); 
+        rawResult = parsedBody;
+      } catch { 
+        parsedBody = { rawText: responseBodyText }; 
+        rawResult = parsedBody;
+      }
     }
 
     const formatErrorRegex = /format.*not supported|json_mode.*not supported|cannot respond in.*format|mimetype.*invalid/i;
     const errorMessage = parsedBody.error?.message || parsedBody.error || responseBodyText;
     let retryAttempted = false;
 
-    if (format === 'json' && statusCode === 400 && formatErrorRegex.test(errorMessage)) {
+    // Retry hanya berlaku untuk model text_out dalam format JSON
+    if (modelType === 'text_out' && format === 'json' && statusCode === 400 && formatErrorRegex.test(errorMessage)) {
       retryAttempted = true;
       const fallbackRequest: UnifiedRequest = {
         model: currentModel.model_identifier,
@@ -532,13 +597,35 @@ fastify.post('/api/models/test', async (request, reply) => {
     let outputTokens = 0;
     let responseText = '';
     if (isSuccess) {
-      responseText = config.parseResponseText(parsedBody);
-      const providerUsage = config.parseUsage(parsedBody);
-      if (providerUsage) {
-        promptTokens = providerUsage.promptTokens;
-        outputTokens = providerUsage.outputTokens;
-      } else {
+      if (modelType === 'embedding') {
+        if (currentModel.provider === 'gemini') {
+          const vals = parsedBody.embedding?.values || [];
+          responseText = `Embedding values generated. Size: ${vals.length}`;
+          outputTokens = vals.length;
+        } else {
+          const vals = parsedBody.data?.[0]?.embedding || [];
+          responseText = `Embedding values generated. Size: ${vals.length}`;
+          outputTokens = vals.length;
+        }
+      } 
+      else if (modelType === 'text_to_speech') {
+        responseText = parsedBody.info || responseBodyText;
+        outputTokens = Math.ceil((parsedBody.size_bytes || 0) / 4);
+      } 
+      else if (modelType === 'audio_native_dialog' || modelType === 'translator') {
+        responseText = config.parseResponseText(parsedBody);
         outputTokens = countTokens(responseText);
+      } 
+      else {
+        // text_out
+        responseText = config.parseResponseText(parsedBody);
+        const providerUsage = config.parseUsage(parsedBody);
+        if (providerUsage) {
+          promptTokens = providerUsage.promptTokens;
+          outputTokens = providerUsage.outputTokens;
+        } else {
+          outputTokens = countTokens(responseText);
+        }
       }
     }
 
