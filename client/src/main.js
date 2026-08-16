@@ -51,6 +51,7 @@ function showDashboard() {
     else b.classList.remove("active");
   });
   
+  showEmptyState('pesan');
   if (typeof loadPersonas === 'function') loadPersonas();
 }
 
@@ -335,6 +336,37 @@ btnLogout.addEventListener("click", async () => {
 window.activeTab = 'pesan';
 checkSession();
 
+// Helper untuk menyembunyikan chat/kartu dan menampilkan empty state
+window.showEmptyState = function(tabName) {
+  const chatHeader = document.getElementById("chat-header-section");
+  const chatMessages = document.getElementById("chat-messages");
+  const chatInputArea = document.getElementById("chat-input-area-section");
+  const inputAssistance = document.getElementById("input-assistance");
+  const cardsContainer = document.getElementById("cards-container");
+  const emptyState = document.getElementById("chat-empty-state");
+  const emptyStateDesc = document.getElementById("empty-state-desc");
+
+  if (chatHeader) chatHeader.classList.add("hidden");
+  if (chatMessages) chatMessages.classList.add("hidden");
+  if (chatInputArea) chatInputArea.classList.add("hidden");
+  if (inputAssistance) inputAssistance.classList.add("hidden");
+  
+  if (tabName === 'kartu') {
+    if (emptyState) emptyState.classList.add("hidden");
+    if (cardsContainer) cardsContainer.classList.remove("hidden");
+  } else {
+    if (cardsContainer) cardsContainer.classList.add("hidden");
+    if (emptyState) {
+      emptyState.classList.remove("hidden");
+      if (tabName === 'pesan') {
+        emptyStateDesc.textContent = "Silakan pilih salah satu kontak di sidebar untuk mulai berlatih percakapan.";
+      } else if (tabName === 'ujian') {
+        emptyStateDesc.textContent = "Silakan pilih salah satu simulasi ujian di sidebar untuk memulai ujian.";
+      }
+    }
+  }
+};
+
 // Listener navigasi tab utama & FAB dinamis
 const mainTabs = document.querySelectorAll("#main-tabs .tab");
 const sidebarFab = document.getElementById("sidebar-fab");
@@ -347,17 +379,17 @@ mainTabs.forEach(btn => {
     window.activeTab = this.getAttribute("data-tab");
     console.log("Tab aktif berganti ke:", window.activeTab);
     
-    // Bersihkan detail chat kanan saat pindah tab
+    // Bersihkan detail chat kanan saat pindah tab (kembali ke empty state)
     activePersonaId = null;
     activeExamId = null;
+    showEmptyState(window.activeTab);
     
     if (window.activeTab === 'pesan') {
       loadPersonas();
     } else if (window.activeTab === 'ujian') {
       loadExams();
     } else if (window.activeTab === 'kartu') {
-      const chatListEl = document.querySelector('.chat-list');
-      chatListEl.innerHTML = '<p style="text-align:center; color:var(--text-soft); padding: 20px;">Kartu Glosarium akan segera hadir pada fase berikutnya.</p>';
+      loadCardGroups();
     }
   });
 });
@@ -369,7 +401,7 @@ if (sidebarFab) {
     } else if (window.activeTab === 'ujian') {
       openModal('modal-add-exam');
     } else if (window.activeTab === 'kartu') {
-      showToast("Fitur tambah kartu belum tersedia.", "info");
+      openModal('modal-add-group');
     }
   });
 }
@@ -777,6 +809,386 @@ window.saveExam = async function() {
     btnSave.textContent = "Simpan Ujian";
   }
 };
+
+// ==========================================
+// KARTU / GLOSARIUM LOGIC (REVAMP)
+// ==========================================
+window.activeGroupId = null;
+window.activeCardLanguage = 'jp';
+window.cardGroupsData = [];
+window.cardsData = [];
+window.currentCardDetailIndex = 0;
+
+window.loadCardGroups = async function() {
+  if (!supabase) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+
+  try {
+    const { data: groups, error } = await supabase
+      .from('card_groups')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+
+    window.cardGroupsData = groups;
+    const chatListEl = document.querySelector('.chat-list');
+    chatListEl.innerHTML = '';
+
+    // Render "Semua Kartu" Option
+    const activeAllClass = window.activeGroupId === null ? 'active' : '';
+    chatListEl.insertAdjacentHTML('beforeend', `
+      <article class="chat-item ${activeAllClass}" onclick="window.selectCardGroup(null)">
+          <div class="avatar avatar--purple-light"><i class="fa-solid fa-layer-group"></i></div>
+          <div class="chat-info">
+              <div class="chat-meta">
+                  <h3>Semua Kartu</h3>
+              </div>
+          </div>
+      </article>
+    `);
+
+    // Render groups
+    groups.forEach(g => {
+      const activeClass = window.activeGroupId === g.id ? 'active' : '';
+      chatListEl.insertAdjacentHTML('beforeend', `
+        <article class="chat-item ${activeClass}" onclick="window.selectCardGroup('${g.id}')">
+            <div class="avatar avatar--purple-light"><i class="fa-solid fa-folder"></i></div>
+            <div class="chat-info">
+                <div class="chat-meta">
+                    <h3>${g.name}</h3>
+                </div>
+            </div>
+            <button class="menu-btn" onclick="deleteCardGroup('${g.id}'); event.stopPropagation();">
+                <i class="fa-solid fa-trash" style="font-size: 0.85rem;"></i>
+            </button>
+        </article>
+      `);
+    });
+
+    window.loadCards();
+  } catch (err) {
+    console.error("Gagal memuat kelompok kartu:", err);
+    showToast("Gagal memuat kelompok kartu: " + err.message, "error");
+  }
+};
+
+window.saveCardGroup = async function() {
+  if (!supabase) return;
+  const name = document.getElementById("input-group-name").value.trim();
+  if (!name) return;
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+
+  const btnSave = document.getElementById("btn-save-group");
+  btnSave.disabled = true;
+
+  try {
+    const { error } = await supabase.from('card_groups').insert([{
+      user_id: session.user.id,
+      name
+    }]);
+
+    if (error) throw error;
+
+    showToast("Kelompok kartu berhasil ditambahkan!", "success");
+    closeModal('modal-add-group');
+    document.getElementById("form-add-group").reset();
+    window.loadCardGroups();
+  } catch (err) {
+    alert("Gagal menyimpan kelompok: " + err.message);
+  } finally {
+    btnSave.disabled = false;
+  }
+};
+
+window.deleteCardGroup = async function(id) {
+  const confirmDelete = await showConfirm("Yakin ingin menghapus kelompok ini?");
+  if (!confirmDelete) return;
+
+  try {
+    const { error } = await supabase.from('card_groups').delete().eq('id', id);
+    if (error) throw error;
+
+    if (window.activeGroupId === id) window.activeGroupId = null;
+    window.loadCardGroups();
+  } catch (err) {
+    alert("Gagal menghapus kelompok: " + err.message);
+  }
+};
+
+window.selectCardGroup = function(groupId) {
+  window.activeGroupId = groupId;
+  
+  // Highlight active sidebar item
+  const items = document.querySelectorAll('.chat-list .chat-item');
+  items.forEach((item, idx) => {
+    item.classList.remove('active');
+  });
+  
+  window.loadCardGroups(); // Reload to update active states
+};
+
+window.loadCards = async function() {
+  if (!supabase) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+
+  const searchInput = document.getElementById("cards-search-input");
+  const searchQuery = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+  try {
+    let query = supabase.from('cards').select('*').eq('user_id', session.user.id).eq('language', window.activeCardLanguage);
+
+    if (window.activeGroupId !== null) {
+      query = query.eq('group_id', window.activeGroupId);
+    }
+
+    const { data: cards, error } = await query.order('created_at', { ascending: false });
+    if (error) throw error;
+
+    // Local filter search query
+    window.cardsData = cards.filter(c => {
+      const matchWord = c.word.toLowerCase().includes(searchQuery);
+      const matchMeaning = c.meaning.toLowerCase().includes(searchQuery);
+      const matchReading = c.reading ? c.reading.toLowerCase().includes(searchQuery) : false;
+      return matchWord || matchMeaning || matchReading;
+    });
+
+    const cardsGrid = document.getElementById("cards-grid");
+    if (!cardsGrid) return;
+
+    cardsGrid.innerHTML = '';
+
+    if (window.cardsData.length === 0) {
+      cardsGrid.innerHTML = '<p style="text-align:center; color:var(--text-soft); grid-column: 1/-1; padding: 40px;">Belum ada kartu glosarium untuk kriteria ini.</p>';
+      return;
+    }
+
+    window.cardsData.forEach((c, index) => {
+      // Find group name
+      const grp = window.cardGroupsData.find(g => g.id === c.group_id);
+      const groupBadgeHtml = grp 
+        ? `<span class="card-group-badge">${grp.name}</span>`
+        : `<button class="card-add-group-btn" onclick="window.openAddToGroupModal('${c.id}'); event.stopPropagation();"><i class="fa-solid fa-plus"></i> Kelompok</button>`;
+
+      const cardHtml = `
+        <div class="card-item-box" onclick="window.openWordCardDetail(${index})">
+            <div>
+                <h4>${c.word}</h4>
+                <p class="reading">${c.reading || ''}</p>
+                <p class="meaning">${c.meaning}</p>
+            </div>
+            ${groupBadgeHtml}
+        </div>
+      `;
+      cardsGrid.insertAdjacentHTML('beforeend', cardHtml);
+    });
+  } catch (err) {
+    console.error("Gagal memuat kartu:", err);
+  }
+};
+
+// Language tabs click handler
+document.querySelectorAll("#cards-lang-tabs .lang-tab").forEach(tab => {
+  tab.addEventListener("click", function() {
+    document.querySelectorAll("#cards-lang-tabs .lang-tab").forEach(t => t.classList.remove("active"));
+    this.classList.add("active");
+    window.activeCardLanguage = this.getAttribute("data-lang");
+    window.loadCards();
+  });
+});
+
+// Search input keyup handler
+const searchInput = document.getElementById("cards-search-input");
+if (searchInput) {
+  searchInput.addEventListener("input", () => {
+    window.loadCards();
+  });
+}
+
+// Add to Group Modals
+let activeCardIdToGroup = null;
+window.openAddToGroupModal = function(cardId) {
+  activeCardIdToGroup = cardId;
+  const select = document.getElementById("select-card-group-option");
+  if (!select) return;
+
+  select.innerHTML = '';
+  window.cardGroupsData.forEach(g => {
+    select.insertAdjacentHTML('beforeend', `<option value="${g.id}">${g.name}</option>`);
+  });
+
+  if (window.cardGroupsData.length === 0) {
+    alert("Silakan buat kelompok kartu terlebih dahulu di sidebar kiri!");
+    return;
+  }
+
+  openModal('modal-add-to-group');
+};
+
+window.addCardToGroupSubmit = async function() {
+  if (!supabase || !activeCardIdToGroup) return;
+  const select = document.getElementById("select-card-group-option");
+  const groupId = select.value;
+
+  try {
+    const { error } = await supabase
+      .from('cards')
+      .update({ group_id: groupId })
+      .eq('id', activeCardIdToGroup);
+
+    if (error) throw error;
+
+    showToast("Kartu berhasil ditambahkan ke kelompok!", "success");
+    closeModal('modal-add-to-group');
+    window.loadCards();
+    
+    // Update popover if open
+    const popover = document.getElementById("popover-word-card");
+    if (popover && !popover.classList.contains("hidden")) {
+      const idx = window.currentCardDetailIndex;
+      // Refresh current card info from window.cardsData
+      const c = window.cardsData[idx];
+      if (c && c.id === activeCardIdToGroup) {
+        c.group_id = groupId;
+        window.openWordCardDetail(idx);
+      }
+    }
+  } catch (err) {
+    alert("Gagal menambahkan ke kelompok: " + err.message);
+  }
+};
+
+// Word Card popover revamping (Speak, Group, Collapsible Leta)
+window.openWordCardDetail = function(index) {
+  window.currentCardDetailIndex = index;
+  const c = window.cardsData[index];
+  if (!c) return;
+
+  const popover = document.getElementById("popover-word-card");
+  const title = document.getElementById("word-card-title");
+  const reading = document.getElementById("word-card-reading");
+  const meaning = document.getElementById("word-card-meaning");
+  const idxLabel = document.getElementById("word-card-index");
+
+  title.textContent = c.word;
+  reading.textContent = c.reading || '';
+  meaning.textContent = c.meaning;
+  idxLabel.textContent = `${index + 1} / ${window.cardsData.length}`;
+
+  // Group area badge or button inside popover
+  const groupArea = document.getElementById("word-card-group-area");
+  if (groupArea) {
+    const grp = window.cardGroupsData.find(g => g.id === c.group_id);
+    if (grp) {
+      groupArea.innerHTML = `<span class="card-group-badge" style="margin: 0; background: var(--primary-soft); color: var(--primary); font-size: 0.7rem; border-radius: 12px; font-weight:600;">${grp.name}</span>`;
+    } else {
+      groupArea.innerHTML = `<button class="card-add-group-btn" style="margin: 0; font-size: 0.7rem; border-radius: 12px; cursor: pointer; border: none;" onclick="window.openAddToGroupModal('${c.id}')"><i class="fa-solid fa-plus"></i> Kelompok</button>`;
+    }
+  }
+
+  // Speak voice pronunciation
+  const btnSpeak = document.getElementById("btn-speak-word");
+  if (btnSpeak) {
+    // Clear old listeners
+    const newBtn = btnSpeak.cloneNode(true);
+    btnSpeak.replaceWith(newBtn);
+    newBtn.addEventListener("click", () => {
+      const utterance = new SpeechSynthesisUtterance(c.word);
+      utterance.lang = c.language === 'en' ? 'en-US' : 'ja-JP';
+      window.speechSynthesis.speak(utterance);
+      showToast("Memutar audio pelafalan...", "info");
+    });
+  }
+
+  // Reset collapsible Tanya Leta chat
+  const letaCollapse = document.getElementById("leta-card-collapse");
+  const letaChevron = document.getElementById("leta-chat-chevron");
+  if (letaCollapse) letaCollapse.classList.add("hidden");
+  if (letaChevron) letaChevron.style.transform = "";
+
+  const letaMessages = document.getElementById("leta-card-chat-messages");
+  if (letaMessages) {
+    letaMessages.innerHTML = `<p style="color: var(--text-soft); text-align: center; margin: 0; padding: 10px 0;">Tanyakan tentang kata "${c.word}" kepada Leta.</p>`;
+  }
+
+  // Pre/Next navigation buttons
+  const btnPrev = document.getElementById("btn-word-prev");
+  const btnNext = document.getElementById("btn-word-next");
+
+  btnPrev.onclick = () => {
+    if (index > 0) window.openWordCardDetail(index - 1);
+  };
+  btnNext.onclick = () => {
+    if (index < window.cardsData.length - 1) window.openWordCardDetail(index + 1);
+  };
+
+  openModal('popover-word-card');
+};
+
+window.closeWordCard = function() {
+  closeModal('popover-word-card');
+};
+
+// Tanya Leta Card Collapsible Logic
+const btnToggleLetaChat = document.getElementById("btn-toggle-leta-chat");
+const letaCollapseDetail = document.getElementById("leta-card-collapse");
+const letaChevronDetail = document.getElementById("leta-chat-chevron");
+
+if (btnToggleLetaChat && letaCollapseDetail) {
+  btnToggleLetaChat.addEventListener("click", () => {
+    const isHidden = letaCollapseDetail.classList.toggle("hidden");
+    if (letaChevronDetail) {
+      letaChevronDetail.style.transform = isHidden ? "" : "rotate(180deg)";
+    }
+  });
+}
+
+// Send question inside Card to Leta (Mock response)
+const btnSendLetaCard = document.getElementById("btn-send-leta-card");
+const letaCardInput = document.getElementById("leta-card-input");
+const letaCardChatMessages = document.getElementById("leta-card-chat-messages");
+
+if (btnSendLetaCard && letaCardInput) {
+  const sendLetaQuestion = () => {
+    const qText = letaCardInput.value.trim();
+    if (!qText) return;
+
+    letaCardInput.value = '';
+
+    // Append user message
+    letaCardChatMessages.innerHTML = `
+      <div style="margin-bottom: 8px;">
+          <strong style="color: var(--primary);">Anda:</strong>
+          <span style="color: var(--text);">${qText}</span>
+      </div>
+    `;
+
+    // Append mock Leta response
+    const currentCard = window.cardsData[window.currentCardDetailIndex];
+    const word = currentCard ? currentCard.word : '';
+    setTimeout(() => {
+      letaCardChatMessages.insertAdjacentHTML('beforeend', `
+        <div>
+            <strong style="color: var(--success);"><i class="fa-solid fa-robot"></i> Leta:</strong>
+            <span style="color: var(--text);">Kata "${word}" memiliki arti "${currentCard?.meaning || ''}". Penggunaannya sangat sering ditemukan dalam percakapan sehari-hari. Apakah ada hal lain yang ingin ditanyakan?</span>
+        </div>
+      `);
+      letaCardChatMessages.scrollTop = letaCardChatMessages.scrollHeight;
+    }, 800);
+  };
+
+  btnSendLetaCard.addEventListener("click", sendLetaQuestion);
+  letaCardInput.addEventListener("keydown", (e) => {
+    if (e.key === 'Enter') {
+      sendLetaQuestion();
+    }
+  });
+}
 
 // ==========================================
 // RENDER DAFTAR CHAT & MENU TITIK TIGA
@@ -1247,6 +1659,21 @@ function handleSendMessage() {
   }, 1000);
 }
 
+window.revealChatArea = function() {
+  const chatHeader = document.getElementById("chat-header-section");
+  const chatMessages = document.getElementById("chat-messages");
+  const chatInputArea = document.getElementById("chat-input-area-section");
+  const emptyState = document.getElementById("chat-empty-state");
+  const cardsContainer = document.getElementById("cards-container");
+
+  if (emptyState) emptyState.classList.add("hidden");
+  if (cardsContainer) cardsContainer.classList.add("hidden");
+  
+  if (chatHeader) chatHeader.classList.remove("hidden");
+  if (chatMessages) chatMessages.classList.remove("hidden");
+  if (chatInputArea) chatInputArea.classList.remove("hidden");
+};
+
 window.openChat = function(id) {
   activePersonaId = id;
   activeExamId = null;
@@ -1254,6 +1681,7 @@ window.openChat = function(id) {
   if (!p) return;
   
   console.log("Membuka chat dengan ID:", id);
+  window.revealChatArea();
   
   // Update UI Header
   const activeChatName = document.querySelector(".chat-header-info h2");
@@ -1333,6 +1761,7 @@ window.openExam = function(id) {
   if (!e) return;
   
   console.log("Membuka ujian dengan ID:", id);
+  window.revealChatArea();
   
   // Update UI Header
   const activeChatName = document.querySelector(".chat-header-info h2");

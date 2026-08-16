@@ -131,7 +131,34 @@
 
             <!-- Main Chat Area -->
             <main class="chat-area" id="chat-area">
-                <header class="chat-header">
+                <!-- Empty State -->
+                <div class="chat-empty-state" id="chat-empty-state">
+                    <div class="empty-state-content">
+                        <i class="fa-solid fa-comments"></i>
+                        <h3>Belum Ada Percakapan Terpilih</h3>
+                        <p id="empty-state-desc">Silakan pilih salah satu kontak di sidebar untuk mulai berlatih percakapan.</p>
+                    </div>
+                </div>
+
+                <!-- Katalog Kartu (Glosarium) -->
+                <div class="cards-container hidden" id="cards-container">
+                    <header class="cards-header">
+                        <div class="search-wrapper">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="cards-search-input" placeholder="Cari kata atau arti...">
+                        </div>
+                        <div class="cards-lang-tabs" id="cards-lang-tabs">
+                            <button class="lang-tab active" data-lang="jp">Jepang</button>
+                            <button class="lang-tab" data-lang="en">Inggris</button>
+                        </div>
+                    </header>
+                    <div class="cards-grid" id="cards-grid">
+                        <!-- Kartu dinamis akan di-render di sini via JS -->
+                    </div>
+                </div>
+
+                <!-- Chat Header -->
+                <header class="chat-header hidden" id="chat-header-section">
                     <button class="icon-button back-button" id="btn-back-sidebar" onclick="closeChatMobile()"><i class="fa-solid fa-arrow-left"></i></button>
                     <div class="chat-header-profile">
                         <div class="avatar avatar--purple">E</div>
@@ -153,7 +180,7 @@
                     </div>
                 </header>
 
-                <div class="chat-messages" id="chat-messages">
+                <div class="chat-messages hidden" id="chat-messages">
                     <!-- Obrolan dinamis akan di-render di sini via JS -->
                 </div>
 
@@ -169,7 +196,7 @@
                     </button>
                 </div>
 
-                <footer class="chat-input-area">
+                <footer class="chat-input-area hidden" id="chat-input-area-section">
                     <button class="icon-button" id="btn-toggle-assistance" title="Asisten Input" style="font-size: 1.4rem;">
                         <i class="fa-solid fa-circle-chevron-up"></i>
                     </button>
@@ -523,10 +550,16 @@
             <div class="modal-body" style="padding: 24px; text-align: center;">
                 <button class="icon-button" onclick="closeWordCard()" style="position: absolute; top: 15px; right: 15px; font-size: 0.9rem;"><i class="fa-solid fa-xmark"></i></button>
                 
-                <button class="icon-button" id="btn-star-word" style="position: absolute; top: 15px; left: 15px; font-size: 1.1rem; color: var(--text-soft); transition: 0.2s;"><i class="fa-regular fa-star"></i></button>
+                <!-- Group Badge Area / Add to Group Button -->
+                <div id="word-card-group-area" style="position: absolute; top: 15px; left: 15px; text-align: left;">
+                    <!-- Badge atau Tombol tambah kelompok akan di-render di sini -->
+                </div>
 
-                <h1 id="word-card-title" style="font-size: 2.2rem; margin: 25px 0 5px; font-weight: 700; color: var(--text);">Word</h1>
-                <p id="word-card-reading" style="color: var(--text-soft); font-size: 1rem; margin: 0 0 15px; font-style: italic;">Reading</p>
+                <div style="display: flex; align-items: center; justify-content: center; margin-top: 25px;">
+                    <h1 id="word-card-title" style="font-size: 2.2rem; margin: 0; font-weight: 700; color: var(--text);">Word</h1>
+                    <button class="icon-button" id="btn-speak-word" style="font-size: 1.2rem; color: var(--primary); margin-left: 8px; padding: 4px;" title="Suarakan"><i class="fa-solid fa-volume-high"></i></button>
+                </div>
+                <p id="word-card-reading" style="color: var(--text-soft); font-size: 1rem; margin: 5px 0 15px; font-style: italic;">Reading</p>
                 
                 <div style="background: var(--surface-soft); padding: 15px; border-radius: 12px; margin-bottom: 20px;">
                     <p id="word-card-meaning" style="font-size: 1.05rem; font-weight: 500; margin: 0; color: var(--text);">Arti kata</p>
@@ -537,6 +570,61 @@
                     <span id="word-card-index" style="font-size: 0.85rem; color: var(--text-soft); font-weight: 600;">1 / 5</span>
                     <button class="btn-secondary" id="btn-word-next" style="padding: 8px 16px; font-size: 0.9rem;"><i class="fa-solid fa-chevron-right"></i></button>
                 </div>
+
+                <!-- Collapsible Tanya Leta Chat -->
+                <hr style="border: 0; border-top: 1px solid var(--line); margin: 20px 0 15px;">
+                <button class="btn-text w-full" id="btn-toggle-leta-chat" style="font-weight: 600; font-size: 0.9rem; justify-content: center; display: flex; align-items: center; gap: 6px; cursor: pointer; border: none; background: none; color: var(--primary);">
+                    <i class="fa-solid fa-robot"></i> Tanya Leta <i class="fa-solid fa-chevron-down" id="leta-chat-chevron" style="transition: transform 0.2s;"></i>
+                </button>
+                <div id="leta-card-collapse" class="hidden" style="margin-top: 15px; text-align: left;">
+                    <div id="leta-card-chat-messages" style="max-height: 120px; overflow-y: auto; background: var(--surface-soft); padding: 10px; border-radius: 8px; font-size: 0.85rem; line-height: 1.4; margin-bottom: 10px;">
+                        <p style="color: var(--text-soft); text-align: center; margin: 0; padding: 10px 0;">Tanyakan tentang kata ini kepada Leta.</p>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="text" id="leta-card-input" placeholder="Tanyakan Leta..." style="flex: 1; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 0.85rem; background: var(--surface); color: var(--text);">
+                        <button class="btn-primary" id="btn-send-leta-card" style="padding: 6px 10px; font-size: 0.85rem;"><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL TAMBAH KELOMPOK KARTU -->
+    <div id="modal-add-group" class="modal-overlay hidden" style="z-index: 2100;">
+        <div class="modal-container" style="max-width: 320px;">
+            <header class="modal-header">
+                <h2>Tambah Kelompok</h2>
+                <button class="icon-button" onclick="closeModal('modal-add-group')"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div class="modal-body" style="padding: 20px;">
+                <form id="form-add-group" onsubmit="event.preventDefault(); saveCardGroup();">
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem;">Nama Kelompok <span class="required">*</span></label>
+                        <input type="text" class="form-control" id="input-group-name" placeholder="Contoh: JLPT N3 Vocabs" required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text);">
+                    </div>
+                    <button type="submit" class="btn-primary w-full" id="btn-save-group">Simpan Kelompok</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL MASUKKAN KARTU KE KELOMPOK -->
+    <div id="modal-add-to-group" class="modal-overlay hidden" style="z-index: 2300;">
+        <div class="modal-container" style="max-width: 320px;">
+            <header class="modal-header">
+                <h2>Pilih Kelompok</h2>
+                <button class="icon-button" onclick="closeModal('modal-add-to-group')"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div class="modal-body" style="padding: 20px;">
+                <form id="form-add-to-group" onsubmit="event.preventDefault(); addCardToGroupSubmit();">
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem;">Pilih Kelompok Kartu</label>
+                        <select class="form-control" id="select-card-group-option" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text);">
+                            <!-- Kelompok dinamis -->
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-primary w-full" id="btn-submit-add-to-group">Masukkan Kelompok</button>
+                </form>
             </div>
         </div>
     </div>
