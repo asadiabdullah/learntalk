@@ -227,17 +227,29 @@ async function checkSession() {
   }
 }
 
+// Flag: apakah dashboard sudah pernah diinisialisasi dalam sesi ini
+window._dashboardInitialized = false;
+
 // Dengarkan perubahan status login
 if (supabase) {
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === "SIGNED_IN") {
-      await loadUserProfile(session.user.id, session.user.email);
-      // Hanya tampilkan dashboard jika saat ini berada di halaman login/auth
-      const dashboardView = document.getElementById("dashboard-view");
-      if (dashboardView && dashboardView.classList.contains("hidden")) {
-        showDashboard();
+      // Jika dashboard sudah aktif (bukan baru login), JANGAN reset UI sama sekali.
+      // Ini mencegah token refresh background dari Supabase memicu blink ke awal.
+      const dashboardEl = document.getElementById("dashboard-view");
+      const alreadyInDashboard = dashboardEl && !dashboardEl.classList.contains("hidden");
+      
+      if (alreadyInDashboard) {
+        // Hanya perbarui profil user secara diam-diam tanpa menyentuh UI
+        await loadUserProfile(session.user.id, session.user.email);
+        return;
       }
+
+      // Hanya jalankan inisialisasi penuh pada login pertama
+      await loadUserProfile(session.user.id, session.user.email);
+      showDashboard();
     } else if (event === "SIGNED_OUT") {
+      window._dashboardInitialized = false;
       window.userProfile = null;
       showAuth();
     }
