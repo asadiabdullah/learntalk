@@ -1667,14 +1667,28 @@ function extractLlmContent(rawRes) {
 function parseLlmJsonResponse(rawRes) {
   const contentStr = extractLlmContent(rawRes);
   let clean = String(contentStr || '').trim();
-  clean = clean.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+  
+  // 1. Ekstrak blok ```json ... ``` dari posisi mana pun (mengatasi bocornya 'Here's a thinking process:')
+  const jsonCodeBlock = clean.match(/```json\s*([\s\S]*?)\s*```/i) || clean.match(/```\s*([\s\S]*?)\s*```/i);
+  if (jsonCodeBlock && jsonCodeBlock[1]) {
+    clean = jsonCodeBlock[1].trim();
+  } else {
+    // 2. Jika tidak ada tag ```json, cari kurung kurawal '{' pertama dan '}' terakhir
+    const firstBrace = clean.indexOf('{');
+    const lastBrace = clean.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      clean = clean.substring(firstBrace, lastBrace + 1).trim();
+    }
+  }
   
   let parsed = null;
   try {
     parsed = JSON.parse(clean);
   } catch (err) {
-    console.warn("Raw LLM output string (bukan JSON):", clean);
-    return { response: clean };
+    console.warn("Gagal parse JSON LLM:", clean);
+    // Bersihkan teks pemikiran/thinking jika parsing JSON gagal total
+    let fallbackText = String(contentStr || '').replace(/Here's a thinking process:[\s\S]*?```(json)?/i, '').replace(/```$/g, '').trim();
+    return { response: fallbackText || contentStr };
   }
   
   if (typeof parsed === 'object' && parsed !== null) {
@@ -1893,7 +1907,7 @@ User: ${userProfile.name}, ${userProfile.age || 20}yo, ${userProfile.gender || '
 <RecentChatHistory>
 ${recent10}
 </RecentChatHistory>
-Respond in character. Output ONLY valid JSON matching this schema:
+Respond in character. CRITICAL: Do NOT output thinking process, reasoning steps, or intro text. Output ONLY valid JSON matching this schema:
 ${jsonSchemaFormat}
 </System>
 `;
