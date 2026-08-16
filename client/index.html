@@ -63,10 +63,10 @@
                     </div>
                 </header>
 
-                <section class="tabs" aria-label="Tab utama">
-                    <button class="tab active">Pesan</button>
-                    <button class="tab">Ujian</button>
-                    <button class="tab">Kartu</button>
+                <section class="tabs" aria-label="Tab utama" id="main-tabs">
+                    <button class="tab active" data-tab="pesan">Pesan</button>
+                    <button class="tab" data-tab="ujian">Ujian</button>
+                    <button class="tab" data-tab="kartu">Kartu</button>
                 </section>
 
                 <div class="search-bar-modern">
@@ -124,7 +124,7 @@
                     </article>
                 </div>
                 
-                <button class="fab" aria-label="Chat Baru" onclick="openModal('modal-add-persona')">
+                <button class="fab" id="sidebar-fab" aria-label="Tambah Baru">
                     <i class="fa-solid fa-plus"></i>
                 </button>
             </aside>
@@ -304,6 +304,105 @@
         </div>
     </div>
 
+    <!-- MODAL TAMBAH UJIAN -->
+    <div id="modal-add-exam" class="modal-overlay hidden">
+        <div class="modal-container">
+            <header class="modal-header">
+                <h2>Tambah Ujian</h2>
+                <button class="icon-button" onclick="closeModal('modal-add-exam')"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div class="modal-body">
+                <form id="form-add-exam" class="persona-form" data-id="">
+                    <!-- Foto Profil -->
+                    <div class="form-section center-content">
+                        <div class="avatar-upload">
+                            <div class="avatar-preview" id="exam-avatar-preview">
+                                <i class="fa-solid fa-camera"></i>
+                            </div>
+                            <button type="button" class="btn-text" id="btn-pilih-foto-exam">Pilih Foto</button>
+                            <input type="file" id="exam-photo" accept="image/*" hidden>
+                        </div>
+                    </div>
+
+                    <!-- Kategori Pembelajaran -->
+                    <div class="form-section">
+                        <h3>Kategori Ujian</h3>
+                        <div class="form-group-row">
+                            <label>Bahasa</label>
+                            <div class="custom-select" id="exam-lang-select">
+                                <div class="select-selected" id="exam-lang-selected" data-value="jp">
+                                    <img src="https://flagcdn.com/w40/jp.png" alt="Japan">
+                                    <i class="fa-solid fa-chevron-down"></i>
+                                </div>
+                                <div class="select-items select-hide" id="exam-lang-options">
+                                    <div data-value="jp"><img src="https://flagcdn.com/w40/jp.png" alt="Japan"></div>
+                                    <div data-value="en"><img src="https://flagcdn.com/w40/gb.png" alt="English"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Kemampuan Bahasa Anda</label>
+                            <select class="form-control" id="input-exam-lang-level">
+                                <option>1 — Pemula</option>
+                                <option>2 — Dasar</option>
+                                <option>3 — Menengah</option>
+                                <option>4 — Mahir</option>
+                                <option>5 — Natural</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Kemampuan Indonesia (Bot)</label>
+                            <select class="form-control" id="input-exam-indo-level">
+                                <option>1 — Sama sekali tidak tahu</option>
+                                <option>2 — Bisa sedikit</option>
+                                <option>3 — Pandai Indonesia</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Cara Bicara (Gaya Bicara)</label>
+                            <select class="form-control" id="input-exam-speech">
+                                <option>Netral</option>
+                                <option>Ramah</option>
+                                <option>Santai</option>
+                                <option>Hangat</option>
+                                <option>Ceria</option>
+                                <option>Playful</option>
+                                <option>Formal</option>
+                                <option>Akademis</option>
+                                <option>Profesional</option>
+                                <option>Conversational / Natural</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Detail Ujian -->
+                    <div class="form-section">
+                        <h3>Detail Ujian</h3>
+                        <div class="form-group">
+                            <label>Nama Ujian <span class="required">*</span></label>
+                            <input type="text" class="form-control" id="input-exam-name" placeholder="Nama Ujian" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Tujuan</label>
+                            <textarea class="form-control" id="input-exam-goal" rows="2" placeholder="Contoh: Menguji kemampuan percakapan bandara..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Kondisi <span class="required">*</span></label>
+                            <textarea class="form-control" id="input-exam-condition" rows="3" placeholder="Contoh: Anda adalah turis yang kehilangan paspor..." required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Persona <span class="required">*</span></label>
+                            <textarea class="form-control" id="input-exam-persona" rows="3" placeholder="Contoh: Petugas bandara yang tegas namun membantu..." required></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <footer class="modal-footer">
+                <button type="button" class="btn-primary w-full" id="btn-save-exam" onclick="saveExam()">Simpan Ujian</button>
+            </footer>
+        </div>
+    </div>
+
     <!-- MODAL PENGATURAN (BIODATA) -->
     <div id="modal-settings" class="modal-overlay hidden" style="z-index: 2000;">
         <div class="modal-container" style="max-width: 650px; height: 500px; display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: 16px;">
@@ -374,6 +473,47 @@
                     <p id="leta-answer-text" style="margin: 0; font-size: 0.9rem; line-height: 1.4; color: var(--text);"></p>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- MODAL LIHAT LAPORAN UJIAN -->
+    <div id="modal-view-report" class="modal-overlay hidden" style="z-index: 2100;">
+        <div class="modal-container" style="max-width: 500px;">
+            <header class="modal-header">
+                <h2>Laporan Hasil Ujian</h2>
+                <button class="icon-button" onclick="closeModal('modal-view-report')"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="font-size: 3.5rem; color: var(--success); margin-bottom: 10px;">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </div>
+                    <h3 id="report-exam-name" style="margin: 0; font-size: 1.25rem;">Ujian Bandara Haneda</h3>
+                    <p style="color: var(--text-soft); font-size: 0.9rem; margin: 4px 0 0;">Status: Selesai</p>
+                </div>
+                
+                <div style="background: var(--surface-soft); padding: 15px; border-radius: 12px; margin-bottom: 15px; border-left: 4px solid var(--primary);">
+                    <h4 style="margin: 0 0 6px; font-size: 0.95rem; color: var(--text-soft);">Skor Keseluruhan</h4>
+                    <p id="report-score" style="margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--primary);">85 / 100</p>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-soft); display: block; margin-bottom: 6px;">Umpan Balik AI (Evaluasi)</label>
+                    <div id="report-feedback" style="background: var(--surface-soft); padding: 12px; border-radius: 8px; font-size: 0.9rem; line-height: 1.4; max-height: 150px; overflow-y: auto;">
+                        Tata bahasa Anda secara keseluruhan sudah baik. Anda berhasil menanyakan kehilangan paspor dengan sopan. Beberapa koreksi pada penggunaan partikel 'ni' dan 'de' telah disertakan dalam riwayat chat.
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-soft); display: block; margin-bottom: 6px;">Rekomendasi Pembelajaran</label>
+                    <div id="report-recommendation" style="background: var(--surface-soft); padding: 12px; border-radius: 8px; font-size: 0.9rem; line-height: 1.4;">
+                        Pelajari kembali perbedaan partikel tempat tujuan dan partikel tempat aktivitas (ke vs di).
+                    </div>
+                </div>
+            </div>
+            <footer class="modal-footer">
+                <button class="btn-primary w-full" onclick="closeModal('modal-view-report')">Tutup</button>
+            </footer>
         </div>
     </div>
 

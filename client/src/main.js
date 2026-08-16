@@ -42,6 +42,15 @@ function showDashboard() {
   authView.classList.remove("active");
   dashboardView.classList.remove("hidden");
   dashboardView.classList.add("active");
+  
+  // Reset tab active state
+  window.activeTab = 'pesan';
+  const mainTabs = document.querySelectorAll("#main-tabs .tab");
+  mainTabs.forEach(b => {
+    if (b.getAttribute("data-tab") === 'pesan') b.classList.add("active");
+    else b.classList.remove("active");
+  });
+  
   if (typeof loadPersonas === 'function') loadPersonas();
 }
 
@@ -319,7 +328,47 @@ btnLogout.addEventListener("click", async () => {
 });
 
 // Inisialisasi awal
+window.activeTab = 'pesan';
 checkSession();
+
+// Listener navigasi tab utama & FAB dinamis
+const mainTabs = document.querySelectorAll("#main-tabs .tab");
+const sidebarFab = document.getElementById("sidebar-fab");
+
+mainTabs.forEach(btn => {
+  btn.addEventListener("click", function() {
+    mainTabs.forEach(b => b.classList.remove("active"));
+    this.classList.add("active");
+    
+    window.activeTab = this.getAttribute("data-tab");
+    console.log("Tab aktif berganti ke:", window.activeTab);
+    
+    // Bersihkan detail chat kanan saat pindah tab
+    activePersonaId = null;
+    activeExamId = null;
+    
+    if (window.activeTab === 'pesan') {
+      loadPersonas();
+    } else if (window.activeTab === 'ujian') {
+      loadExams();
+    } else if (window.activeTab === 'kartu') {
+      const chatListEl = document.querySelector('.chat-list');
+      chatListEl.innerHTML = '<p style="text-align:center; color:var(--text-soft); padding: 20px;">Kartu Glosarium akan segera hadir pada fase berikutnya.</p>';
+    }
+  });
+});
+
+if (sidebarFab) {
+  sidebarFab.addEventListener("click", () => {
+    if (window.activeTab === 'pesan') {
+      openModal('modal-add-persona');
+    } else if (window.activeTab === 'ujian') {
+      openModal('modal-add-exam');
+    } else if (window.activeTab === 'kartu') {
+      showToast("Fitur tambah kartu belum tersedia.", "info");
+    }
+  });
+}
 
 // ==========================================
 // CUSTOM FLAG SELECT LOGIC
@@ -346,6 +395,32 @@ if (langSelected && langOptions) {
 
   document.addEventListener("click", function() {
     langOptions.classList.add("select-hide");
+  });
+}
+
+// Custom flag select for Exam
+const examLangSelected = document.getElementById("exam-lang-selected");
+const examLangOptions = document.getElementById("exam-lang-options");
+if (examLangSelected && examLangOptions) {
+  examLangSelected.addEventListener("click", function(e) {
+    e.stopPropagation();
+    examLangOptions.classList.toggle("select-hide");
+  });
+
+  examLangOptions.querySelectorAll("div").forEach(option => {
+    option.addEventListener("click", function(e) {
+      const val = this.getAttribute("data-value");
+      const imgSrc = this.querySelector("img").src;
+      const altText = this.querySelector("img").alt;
+      
+      examLangSelected.innerHTML = `<img src="${imgSrc}" alt="${altText}"> <i class="fa-solid fa-chevron-down"></i>`;
+      examLangSelected.setAttribute("data-value", val);
+      examLangOptions.classList.add("select-hide");
+    });
+  });
+
+  document.addEventListener("click", function() {
+    examLangOptions.classList.add("select-hide");
   });
 }
 
@@ -567,6 +642,139 @@ if (formAddPersona) {
 }
 
 // ==========================================
+// TAMBAH UJIAN LOGIC
+// ==========================================
+const btnPilihFotoExam = document.getElementById("btn-pilih-foto-exam");
+const fileInputExam = document.getElementById("exam-photo");
+const avatarPreviewExam = document.getElementById("exam-avatar-preview");
+let selectedExamPhotoFile = null;
+
+if (btnPilihFotoExam && fileInputExam) {
+  btnPilihFotoExam.addEventListener("click", () => fileInputExam.click());
+  avatarPreviewExam.addEventListener("click", () => fileInputExam.click());
+  
+  fileInputExam.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Ukuran foto maksimal 10MB!");
+      fileInputExam.value = "";
+      return;
+    }
+    
+    selectedExamPhotoFile = file;
+    const objectUrl = URL.createObjectURL(file);
+    avatarPreviewExam.innerHTML = `<img src="${objectUrl}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+    btnPilihFotoExam.textContent = "Ganti Foto";
+  });
+}
+
+window.saveExam = async function() {
+  if (!supabase) {
+    alert("Supabase belum terhubung!");
+    return;
+  }
+  
+  const name = document.getElementById("input-exam-name").value.trim();
+  const langLevel = document.getElementById("input-exam-lang-level").value;
+  const indoLevel = document.getElementById("input-exam-indo-level").value;
+  const goal = document.getElementById("input-exam-goal").value.trim();
+  const speech = document.getElementById("input-exam-speech").value;
+  const condition = document.getElementById("input-exam-condition").value.trim();
+  const persona = document.getElementById("input-exam-persona").value.trim();
+  const langValue = examLangSelected ? examLangSelected.getAttribute("data-value") : "jp";
+
+  // Validasi Wajib
+  if (!name || !condition || !persona) {
+    alert("Mohon lengkapi Nama Ujian, Kondisi, dan Persona.");
+    return;
+  }
+
+  const sessionData = await supabase.auth.getSession();
+  const user = sessionData.data.session?.user;
+  if (!user) {
+    alert("Anda harus login untuk membuat ujian.");
+    return;
+  }
+
+  const btnSave = document.getElementById("btn-save-exam");
+  btnSave.disabled = true;
+  btnSave.textContent = "Mengunggah...";
+
+  try {
+    let avatarUrl = null;
+    
+    // Upload Foto jika ada
+    if (selectedExamPhotoFile) {
+      const fileExt = selectedExamPhotoFile.name.split('.').pop();
+      const fileName = `${user.id}/exams/${Date.now()}.${fileExt}`;
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, selectedExamPhotoFile, { upsert: true });
+        
+      if (uploadError) throw uploadError;
+      
+      const { data: publicUrlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+        
+      avatarUrl = publicUrlData.publicUrl;
+    }
+
+    btnSave.textContent = "Menyimpan...";
+
+    const formAddExam = document.getElementById("form-add-exam");
+    const examId = formAddExam.getAttribute("data-id");
+    
+    const payload = {
+      user_id: user.id,
+      name,
+      language: langValue,
+      lang_level: getDbScopeValue('lang_level', langLevel, langValue),
+      indo_level: getDbScopeValue('indo_level', indoLevel),
+      goal,
+      speech_style: getDbScopeValue('speech_style', speech, langValue),
+      condition,
+      persona
+    };
+    if (avatarUrl) payload.avatar_url = avatarUrl;
+
+    if (examId) {
+      // Mode Update
+      const { error } = await supabase.from('exams').update(payload).eq('id', examId);
+      if (error) throw error;
+      alert("Ujian berhasil diperbarui!");
+    } else {
+      // Mode Insert
+      const { error } = await supabase.from('exams').insert([payload]);
+      if (error) throw error;
+      alert("Ujian berhasil ditambahkan!");
+    }
+
+    closeModal('modal-add-exam');
+    formAddExam.reset();
+    formAddExam.setAttribute("data-id", "");
+    document.querySelector('#modal-add-exam .modal-header h2').textContent = "Tambah Ujian";
+    avatarPreviewExam.innerHTML = '<i class="fa-solid fa-camera"></i>';
+    btnPilihFotoExam.textContent = "Pilih Foto";
+    selectedExamPhotoFile = null;
+    
+    // Refresh list if active tab is ujian
+    if (window.activeTab === 'ujian') {
+      loadExams();
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Terjadi kesalahan: " + err.message);
+  } finally {
+    btnSave.disabled = false;
+    btnSave.textContent = "Simpan Ujian";
+  }
+};
+
+// ==========================================
 // RENDER DAFTAR CHAT & MENU TITIK TIGA
 // ==========================================
 window.loadPersonas = async function() {
@@ -631,6 +839,129 @@ window.loadPersonas = async function() {
     `;
     chatListEl.insertAdjacentHTML('beforeend', html);
   });
+};
+
+window.loadExams = async function() {
+  if (!supabase) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+  
+  const { data: exams, error } = await supabase
+    .from('exams')
+    .select('*')
+    .eq('user_id', session.user.id)
+    .order('is_pinned', { ascending: false })
+    .order('created_at', { ascending: false });
+    
+  if (error) {
+    console.error("Gagal memuat ujian:", error);
+    return;
+  }
+  
+  window.examsData = exams;
+  const chatListEl = document.querySelector('.chat-list');
+  chatListEl.innerHTML = '';
+  
+  if (exams.length === 0) {
+    chatListEl.innerHTML = '<p style="text-align:center; color:var(--text-soft); padding: 20px;">Belum ada ujian. Silakan buat ujian baru.</p>';
+    return;
+  }
+  
+  exams.forEach(e => {
+    let avatarHtml = `<div class="avatar avatar--purple">${e.name.charAt(0).toUpperCase()}</div>`;
+    if (e.avatar_url) {
+      avatarHtml = `<img src="${e.avatar_url}" alt="${e.name}" class="avatar" style="object-fit:cover;">`;
+    }
+    
+    const isPinnedStr = e.is_pinned ? `<i class="fa-solid fa-thumbtack" style="font-size:0.7rem; color:var(--text-soft); margin-right:4px;"></i>` : "";
+    const pinText = e.is_pinned ? "Lepas sematan" : "Sematkan";
+    
+    const html = `
+      <article class="chat-item" onclick="openExam('${e.id}')">
+          ${avatarHtml}
+          <div class="chat-info">
+              <div class="chat-meta">
+                  <h3>${isPinnedStr}${e.name}</h3>
+                  <time>${new Date(e.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</time>
+              </div>
+              <div class="chat-preview">
+                  <p>Ketuk untuk memulai simulasi ujian...</p>
+              </div>
+          </div>
+          <button class="menu-btn" onclick="toggleMenu('menu-${e.id}'); event.stopPropagation();">
+              <i class="fa-solid fa-ellipsis-vertical"></i>
+          </button>
+          
+          <div id="menu-${e.id}" class="dropdown-menu">
+              <a href="#" onclick="deleteExam('${e.id}'); event.stopPropagation(); return false;">Hapus ujian</a>
+              <a href="#" onclick="editExam('${e.id}'); event.stopPropagation(); return false;">Edit ujian</a>
+              <a href="#" onclick="togglePinExam('${e.id}', ${e.is_pinned}); event.stopPropagation(); return false;">${pinText}</a>
+              <a href="#" onclick="openViewReportModal('${e.id}'); event.stopPropagation(); return false;">Lihat laporan</a>
+          </div>
+      </article>
+    `;
+    chatListEl.insertAdjacentHTML('beforeend', html);
+  });
+};
+
+window.deleteExam = async function(id) {
+  const confirmDelete = await showConfirm("Yakin ingin menghapus ujian ini?");
+  if (!confirmDelete) return;
+  
+  const { error } = await supabase.from('exams').delete().eq('id', id);
+  if (error) {
+    alert("Gagal menghapus ujian: " + error.message);
+  } else {
+    loadExams();
+  }
+};
+
+window.togglePinExam = async function(id, currentStatus) {
+  const { error } = await supabase.from('exams').update({ is_pinned: !currentStatus }).eq('id', id);
+  if (error) {
+    alert("Gagal memperbarui sematan: " + error.message);
+  } else {
+    loadExams();
+  }
+};
+
+window.editExam = function(id) {
+  const e = window.examsData.find(x => x.id === id);
+  if (!e) return;
+  
+  document.querySelector('#modal-add-exam .modal-header h2').textContent = "Edit Ujian";
+  const formAddExam = document.getElementById("form-add-exam");
+  formAddExam.setAttribute("data-id", e.id);
+  
+  // Set nilai
+  document.getElementById("input-exam-name").value = e.name || "";
+  document.getElementById("input-exam-lang-level").value = getUiLabelValue('lang_level', e.lang_level, e.language);
+  document.getElementById("input-exam-indo-level").value = getUiLabelValue('indo_level', e.indo_level);
+  document.getElementById("input-exam-goal").value = e.goal || "";
+  document.getElementById("input-exam-speech").value = getUiLabelValue('speech_style', e.speech_style, e.language);
+  document.getElementById("input-exam-condition").value = e.condition || "";
+  document.getElementById("input-exam-persona").value = e.persona || "";
+  
+  // Update flag selection visual
+  const examLangSelected = document.getElementById("exam-lang-selected");
+  if (examLangSelected && e.language) {
+    examLangSelected.setAttribute("data-value", e.language);
+    const flagCode = e.language === 'en' ? 'gb' : e.language;
+    examLangSelected.innerHTML = `<img src="https://flagcdn.com/w40/${flagCode}.png" alt="${e.language}"> <i class="fa-solid fa-chevron-down"></i>`;
+  }
+  
+  // Update avatar preview
+  const avatarPreviewExam = document.getElementById("exam-avatar-preview");
+  const btnPilihFotoExam = document.getElementById("btn-pilih-foto-exam");
+  if (e.avatar_url) {
+    avatarPreviewExam.innerHTML = `<img src="${e.avatar_url}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+    btnPilihFotoExam.textContent = "Ganti Foto";
+  } else {
+    avatarPreviewExam.innerHTML = '<i class="fa-solid fa-camera"></i>';
+    btnPilihFotoExam.textContent = "Pilih Foto";
+  }
+  
+  openModal('modal-add-exam');
 };
 
 window.deletePersona = async function(id) {
@@ -865,8 +1196,9 @@ if (btnSend && chatInput) {
 }
 
 function handleSendMessage() {
-  if (!activePersonaId) {
-    showToast("Silakan pilih kontak obrolan terlebih dahulu.", "error");
+  const currentActiveId = activePersonaId || activeExamId;
+  if (!currentActiveId) {
+    showToast("Silakan pilih kontak obrolan atau simulasi ujian terlebih dahulu.", "error");
     return;
   }
   
@@ -877,19 +1209,21 @@ function handleSendMessage() {
   chatInput.value = "";
   
   // Masukkan pesan user ke memory cache
-  if (!messagesData[activePersonaId]) messagesData[activePersonaId] = [];
+  if (!messagesData[currentActiveId]) messagesData[currentActiveId] = [];
   
-  // Jika Mode Koreksi / Ingat Aktif, tambahkan penanda dummy
+  // Jika Mode Koreksi / Ingat Aktif, tambahkan penanda dummy (hanya untuk Persona)
   let finalMessage = text;
-  if (isCorrectionActive && isRememberActive) {
-    finalMessage = `${text} (Telah dikoreksi & ditandai untuk diingat)`;
-  } else if (isCorrectionActive) {
-    finalMessage = `${text} (Telah dikoreksi otomatis)`;
-  } else if (isRememberActive) {
-    finalMessage = `${text} (Telah ditandai untuk diingat)`;
+  if (activePersonaId) {
+    if (isCorrectionActive && isRememberActive) {
+      finalMessage = `${text} (Telah dikoreksi & ditandai untuk diingat)`;
+    } else if (isCorrectionActive) {
+      finalMessage = `${text} (Telah dikoreksi otomatis)`;
+    } else if (isRememberActive) {
+      finalMessage = `${text} (Telah ditandai untuk diingat)`;
+    }
   }
     
-  messagesData[activePersonaId].push({
+  messagesData[currentActiveId].push({
     sender: "user",
     text: finalMessage
   });
@@ -902,9 +1236,9 @@ function handleSendMessage() {
   }, 1000);
 }
 
-// Membuka Obrolan Kontak
 window.openChat = function(id) {
   activePersonaId = id;
+  activeExamId = null;
   const p = window.personasData.find(x => x.id === id);
   if (!p) return;
   
@@ -930,6 +1264,20 @@ window.openChat = function(id) {
     avatarHtml = `<div class="avatar avatar--user" style="margin-right:12px;">${p.name.charAt(0).toUpperCase()}</div>`;
   }
   activeChatAvatarContainer.insertAdjacentHTML("afterbegin", avatarHtml);
+  
+  // Update header dropdown untuk Tanya Leta
+  const headerMenu = document.getElementById("menu-chat-header");
+  if (headerMenu) {
+    const thirdLink = headerMenu.querySelectorAll("a")[2];
+    if (thirdLink) {
+      thirdLink.textContent = "Tanya Leta";
+      thirdLink.setAttribute("onclick", "openAskLetaModal(); event.stopPropagation(); return false;");
+    }
+  }
+
+  // Tampilkan Asisten Input & Chevron
+  const btnToggleAssistance = document.getElementById("btn-toggle-assistance");
+  if (btnToggleAssistance) btnToggleAssistance.style.display = "grid";
   
   // Muat riwayat pesan dari cache, atau isi dengan pesan sambutan dummy jika kosong
   if (!messagesData[activePersonaId]) {
@@ -967,13 +1315,89 @@ window.openChat = function(id) {
   openChatMobile();
 };
 
+window.openExam = function(id) {
+  activePersonaId = null;
+  activeExamId = id;
+  const e = window.examsData.find(x => x.id === id);
+  if (!e) return;
+  
+  console.log("Membuka ujian dengan ID:", id);
+  
+  // Update UI Header
+  const activeChatName = document.querySelector(".chat-header-info h2");
+  const activeChatStatus = document.querySelector(".chat-header-info p");
+  const activeChatAvatarContainer = document.querySelector(".chat-header-profile");
+  
+  activeChatName.textContent = e.name;
+  activeChatStatus.textContent = `Online (Ujian ${e.language === 'en' ? 'Inggris' : 'Jepang'})`;
+  
+  // Bersihkan avatar header lama
+  const existingAvatar = activeChatAvatarContainer.querySelector(".avatar");
+  if (existingAvatar) existingAvatar.remove();
+  
+  // Buat avatar header baru
+  let avatarHtml = "";
+  if (e.avatar_url) {
+    avatarHtml = `<img src="${e.avatar_url}" alt="${e.name}" class="avatar" style="object-fit:cover; margin-right:12px;">`;
+  } else {
+    avatarHtml = `<div class="avatar avatar--purple" style="margin-right:12px;">${e.name.charAt(0).toUpperCase()}</div>`;
+  }
+  activeChatAvatarContainer.insertAdjacentHTML("afterbegin", avatarHtml);
+  
+  // Update header dropdown untuk Lihat Laporan
+  const headerMenu = document.getElementById("menu-chat-header");
+  if (headerMenu) {
+    const thirdLink = headerMenu.querySelectorAll("a")[2];
+    if (thirdLink) {
+      thirdLink.textContent = "Lihat Laporan";
+      thirdLink.setAttribute("onclick", `openViewReportModal('${id}'); event.stopPropagation(); return false;`);
+    }
+  }
+
+  // Sembunyikan Asisten Input & Chevron
+  const btnToggleAssistance = document.getElementById("btn-toggle-assistance");
+  const inputAssistancePanel = document.getElementById("input-assistance");
+  if (btnToggleAssistance) btnToggleAssistance.style.display = "none";
+  if (inputAssistancePanel) inputAssistancePanel.classList.add("hidden");
+  
+  // Muat riwayat pesan dari cache
+  if (!messagesData[activeExamId]) {
+    const initialText = `[SIMULASI UJIAN MULAI]\n\nKondisi: ${e.condition}\n\nPersona Bot: ${e.persona}\n\nTujuan Anda: ${e.goal || '-'}`;
+    messagesData[activeExamId] = [
+      {
+        sender: "ai",
+        text: initialText,
+        translation: "Silakan kirim pesan pertama Anda untuk memulai simulasi ujian.",
+        isPecah: false,
+        isTranslate: false
+      }
+    ];
+  }
+  
+  renderActiveMessages();
+  openChatMobile();
+};
+
+window.openViewReportModal = function(examId) {
+  const e = window.examsData.find(x => x.id === examId);
+  if (!e) return;
+  
+  document.getElementById("report-exam-name").textContent = e.name;
+  document.getElementById("report-score").textContent = "85 / 100";
+  document.getElementById("report-feedback").textContent = `Tata bahasa Anda secara keseluruhan sudah baik dalam simulasi "${e.name}". Anda berhasil melakukan percakapan sesuai kondisi: "${e.condition}".`;
+  document.getElementById("report-recommendation").textContent = "Teruslah berlatih untuk mengasah kosakata spontan Anda.";
+  
+  openModal('modal-view-report');
+};
+
 // Render daftar pesan
 function renderActiveMessages() {
   const container = document.getElementById("chat-messages");
-  if (!container || !activePersonaId) return;
+  const currentActiveId = activePersonaId || activeExamId;
+  if (!container || !currentActiveId) return;
   
   container.innerHTML = "";
-  const list = messagesData[activePersonaId] || [];
+  const list = messagesData[currentActiveId] || [];
   
   list.forEach((m, idx) => {
     if (m.sender === "user") {
@@ -989,11 +1413,18 @@ function renderActiveMessages() {
       `;
       container.insertAdjacentHTML("beforeend", userHtml);
     } else {
-      // Render balon chat Persona AI
-      const p = window.personasData.find(x => x.id === activePersonaId);
-      let avatarHtml = `<div class="avatar avatar--user">${p ? p.name.charAt(0).toUpperCase() : "A"}</div>`;
-      if (p && p.avatar_url) {
-        avatarHtml = `<img src="${p.avatar_url}" alt="${p.name}" class="avatar" style="object-fit:cover;">`;
+      // Render balon chat Persona AI / Exam Bot
+      let avatarHtml = "";
+      if (activePersonaId) {
+        const p = window.personasData?.find(x => x.id === activePersonaId);
+        avatarHtml = p && p.avatar_url 
+          ? `<img src="${p.avatar_url}" alt="${p.name}" class="avatar" style="object-fit:cover;">`
+          : `<div class="avatar avatar--user">${p ? p.name.charAt(0).toUpperCase() : "A"}</div>`;
+      } else {
+        const e = window.examsData?.find(x => x.id === activeExamId);
+        avatarHtml = e && e.avatar_url 
+          ? `<img src="${e.avatar_url}" alt="${e.name}" class="avatar" style="object-fit:cover;">`
+          : `<div class="avatar avatar--purple">${e ? e.name.charAt(0).toUpperCase() : "U"}</div>`;
       }
       
       // Cek apakah mode pecah kata aktif
@@ -1005,23 +1436,31 @@ function renderActiveMessages() {
         textContent = `<div class="word-tokens-container">${tokensHtml}</div>`;
       }
       
+      // Tampilkan terjemahan jika aktif (hanya untuk mode biasa)
+      const translationHtml = (activePersonaId && m.translation) 
+        ? `<div class="translation-text ${m.isTranslate ? 'visible' : ''}">${m.translation}</div>`
+        : "";
+        
+      // Tampilkan aksi tombol (hanya untuk mode biasa)
+      const actionsHtml = activePersonaId 
+        ? `
+        <div class="message-actions">
+          <button onclick="toggleTranslate(${idx})" class="${m.isTranslate ? 'active' : ''}" title="Terjemah"><i class="fa-solid fa-language"></i></button>
+          <button onclick="togglePecahKata(${idx})" class="${m.isPecah ? 'active' : ''}" title="Pecah Kata"><i class="fa-solid fa-scissors"></i></button>
+          <button onclick="refreshMessage(${idx})" title="Refresh"><i class="fa-solid fa-rotate"></i></button>
+          <button onclick="playDummyAudio(this)" title="Suara"><i class="fa-solid fa-volume-high"></i></button>
+          <button onclick="openAskLetaModal()" title="Tanya Leta"><i class="fa-solid fa-robot"></i></button>
+        </div>
+        `
+        : "";
+      
       const aiHtml = `
         <div class="message-group">
             ${avatarHtml}
             <div class="message-bubble">
                 ${textContent}
-                
-                <div class="translation-text ${m.isTranslate ? 'visible' : ''}">
-                  ${m.translation}
-                </div>
-                
-                <div class="message-actions">
-                  <button onclick="toggleTranslate(${idx})" class="${m.isTranslate ? 'active' : ''}" title="Terjemah"><i class="fa-solid fa-language"></i></button>
-                  <button onclick="togglePecahKata(${idx})" class="${m.isPecah ? 'active' : ''}" title="Pecah Kata"><i class="fa-solid fa-scissors"></i></button>
-                  <button onclick="refreshMessage(${idx})" title="Refresh"><i class="fa-solid fa-rotate"></i></button>
-                  <button onclick="playDummyAudio(this)" title="Suara"><i class="fa-solid fa-volume-high"></i></button>
-                  <button onclick="openAskLetaModal()" title="Tanya Leta"><i class="fa-solid fa-robot"></i></button>
-                </div>
+                ${translationHtml}
+                ${actionsHtml}
                 <span class="time">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
             </div>
         </div>
@@ -1034,23 +1473,28 @@ function renderActiveMessages() {
   container.scrollTop = container.scrollHeight;
 }
 
-// Simulasi balasan Persona AI
+// Simulasi balasan Persona AI / Exam Bot
 function triggerAiResponse() {
-  if (!activePersonaId) return;
-  const p = window.personasData.find(x => x.id === activePersonaId);
-  if (!p) return;
+  const currentActiveId = activePersonaId || activeExamId;
+  if (!currentActiveId) return;
   
-  const lang = p.language || "jp";
+  let lang = "jp";
+  if (activePersonaId) {
+    const p = window.personasData?.find(x => x.id === activePersonaId);
+    if (p) lang = p.language || "jp";
+  } else {
+    const e = window.examsData?.find(x => x.id === activeExamId);
+    if (e) lang = e.language || "jp";
+  }
+  
   const sourceList = DUMMY_RESPONSES[lang] || [];
-  
-  // Ambil respons secara acak
   const randomResp = sourceList[Math.floor(Math.random() * sourceList.length)];
   
-  messagesData[activePersonaId].push({
+  messagesData[currentActiveId].push({
     sender: "ai",
     text: randomResp.text,
     translation: randomResp.translation,
-    tokens: JSON.parse(JSON.stringify(randomResp.tokens)), // Deep copy tokens
+    tokens: JSON.parse(JSON.stringify(randomResp.tokens || [])),
     isPecah: false,
     isTranslate: false
   });
