@@ -91,7 +91,7 @@ async function loadOverviewData() {
 async function loadProvidersData() {
   const tbody = document.querySelector('#providerTable tbody');
   if (tbody.children.length === 0 || tbody.textContent.includes('Belum ada provider') || tbody.textContent.includes('Memuat')) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Memuat data...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Memuat data...</td></tr>';
   }
 
   try {
@@ -99,7 +99,7 @@ async function loadProvidersData() {
     tbody.innerHTML = '';
 
     if (apiKeysList.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">Belum ada provider API Key. Klik "+ Tambah Provider" untuk menambahkan.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-muted);">Belum ada provider API Key. Klik "+ Tambah Provider" untuk menambahkan.</td></tr>';
       return;
     }
 
@@ -117,11 +117,15 @@ async function loadProvidersData() {
         <td><span class="badge badge-blue">${escapeHtml(key.provider)}</span></td>
         <td><span style="font-family:monospace; font-size:0.85rem;">${escapeHtml(limitsStr)}</span></td>
         <td>${dateStr}</td>
+        <td class="actions-cell">
+          <button class="btn-action btn-green" onclick="openEditProviderModal('${key.id}')">📝 Edit</button>
+          <button class="btn-action btn-secondary" style="background:#fecaca; color:#b91c1c;" onclick="deleteProvider('${key.id}', '${escapeHtml(key.name)}')">🗑️ Hapus</button>
+        </td>
       `;
       tbody.appendChild(tr);
     });
   } catch (error) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--error-color);">Gagal memuat data provider.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--error-color);">Gagal memuat data provider.</td></tr>';
   }
 }
 
@@ -691,6 +695,59 @@ async function loadLogsData() {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--error-color);">Gagal memuat log riwayat.</td></tr>';
   }
 }
+
+// --- 6.5. EDIT & DELETE PROVIDER HELPERS ---
+async function deleteProvider(keyId, name) {
+  if (!confirm(`Apakah Anda yakin ingin menghapus provider "${name}" secara permanen? \nPERINGATAN: Semua model yang terhubung dengan provider ini juga akan terhapus!`)) {
+    return;
+  }
+  try {
+    await apiFetch(`/api/api-keys/${keyId}`, { method: 'DELETE' });
+    loadProvidersData();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function openEditProviderModal(keyId) {
+  const key = apiKeysList.find(k => k.id === keyId);
+  if (!key) return;
+
+  document.getElementById('edit-p-id').value = key.id;
+  document.getElementById('edit-p-name').value = key.name;
+  document.getElementById('edit-p-provider').value = key.provider;
+  document.getElementById('edit-p-key').value = ''; // Biarkan kosong agar tidak sengaja overwrite
+
+  // Reset checkboxes sharing limits
+  const checkboxes = document.querySelectorAll('input[name="edit-p-limits"]');
+  checkboxes.forEach(cb => {
+    cb.checked = key.sharing_limits.includes(cb.value);
+  });
+
+  openModal('editProviderModal');
+}
+
+// Submit Edit Provider form
+document.getElementById('editProviderForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('edit-p-id').value;
+  const name = document.getElementById('edit-p-name').value;
+  const provider = document.getElementById('edit-p-provider').value;
+  const secret_key = document.getElementById('edit-p-key').value;
+  
+  const sharing_limits = Array.from(document.querySelectorAll('input[name="edit-p-limits"]:checked')).map(cb => cb.value);
+
+  try {
+    await apiFetch(`/api/api-keys/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name, provider, secret_key, sharing_limits })
+    });
+    closeModal('editProviderModal');
+    loadProvidersData();
+  } catch (err) {
+    console.error(err);
+  }
+});
 
 // --- 7. EDIT & DELETE MODEL HELPERS ---
 async function deleteModel(modelId, modelName) {

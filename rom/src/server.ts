@@ -295,6 +295,51 @@ fastify.post('/api/api-keys', async (request, reply) => {
   }
 });
 
+// PUT /api/api-keys/:id
+fastify.put('/api/api-keys/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const { name, provider, secret_key, sharing_limits } = request.body as any;
+  if (!name || !provider) {
+    reply.status(400);
+    return { error: 'Nama dan Provider wajib diisi!' };
+  }
+  try {
+    let result;
+    if (secret_key && secret_key.trim() !== '') {
+      const encryptedKey = encrypt(secret_key);
+      result = await pool.query(
+        'UPDATE api_keys SET name = $1, provider = $2, secret_key = $3, sharing_limits = $4 WHERE id = $5 RETURNING id, name, provider, sharing_limits, created_at',
+        [name, provider, encryptedKey, sharing_limits || [], id]
+      );
+    } else {
+      result = await pool.query(
+        'UPDATE api_keys SET name = $1, provider = $2, sharing_limits = $3 WHERE id = $4 RETURNING id, name, provider, sharing_limits, created_at',
+        [name, provider, sharing_limits || [], id]
+      );
+    }
+    if (result.rows.length === 0) {
+      reply.status(404);
+      return { error: 'API Key tidak ditemukan.' };
+    }
+    return result.rows[0];
+  } catch (error) {
+    reply.status(500);
+    return { error: 'Gagal memperbarui API Key.' };
+  }
+});
+
+// DELETE /api/api-keys/:id
+fastify.delete('/api/api-keys/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  try {
+    await pool.query('DELETE FROM api_keys WHERE id = $1', [id]);
+    return { success: true, id };
+  } catch (error) {
+    reply.status(500);
+    return { error: 'Gagal menghapus API Key.' };
+  }
+});
+
 // 4. GET /api/models
 fastify.get('/api/models', async (request, reply) => {
   try {

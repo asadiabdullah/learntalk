@@ -128,6 +128,7 @@ Content-Type: application/json
                   <th>Penyedia / Provider</th>
                   <th>Sharing Limits</th>
                   <th>Tanggal Ditambahkan</th>
+                  <th>Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -276,6 +277,56 @@ Content-Type: application/json
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('providerModal')">Batal</button>
           <button type="submit" class="btn btn-green">Simpan Provider</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- EDIT PROVIDER MODAL -->
+  <div id="editProviderModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Edit Provider API Key</h3>
+        <button class="btn-close" onclick="closeModal('editProviderModal')">&times;</button>
+      </div>
+      <form id="editProviderForm">
+        <input type="hidden" id="edit-p-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="edit-p-name">Nama Deskriptif</label>
+            <input type="text" id="edit-p-name" required placeholder="Contoh: Gemini Free Key #1">
+          </div>
+          <div class="form-group">
+            <label for="edit-p-provider">Penyedia Layanan (Provider)</label>
+            <select id="edit-p-provider" required>
+              <option value="gemini">Google Gemini (AI Studio)</option>
+              <option value="groq">Groq Cloud</option>
+              <option value="openaifree">OpenAI Compatible (SambaNova / OpenRouter / Together)</option>
+              <option value="anthropic">Anthropic Claude</option>
+              <option value="cohere">Cohere API</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="edit-p-key">Secret API Key (Kosongkan jika tidak ingin mengubah key)</label>
+            <input type="password" id="edit-p-key" placeholder="Masukkan secret key baru jika ingin mengubah">
+          </div>
+          <div class="form-group">
+            <label>Sharing Limits (Centang batasan kuota yang dibagikan antar-model dalam layanan ini)</label>
+            <div class="checkbox-group">
+              <label class="checkbox-label"><input type="checkbox" name="edit-p-limits" value="rpm"> RPM</label>
+              <label class="checkbox-label"><input type="checkbox" name="edit-p-limits" value="rph"> RPH</label>
+              <label class="checkbox-label"><input type="checkbox" name="edit-p-limits" value="rpd"> RPD</label>
+              <label class="checkbox-label"><input type="checkbox" name="edit-p-limits" value="rpmo"> RPMO</label>
+              <label class="checkbox-label"><input type="checkbox" name="edit-p-limits" value="tkm"> TKM</label>
+              <label class="checkbox-label"><input type="checkbox" name="edit-p-limits" value="tkh"> TKH</label>
+              <label class="checkbox-label"><input type="checkbox" name="edit-p-limits" value="tkd"> TKD</label>
+              <label class="checkbox-label"><input type="checkbox" name="edit-p-limits" value="tkmo"> TKMO</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('editProviderModal')">Batal</button>
+          <button type="submit" class="btn btn-green">Simpan Perubahan</button>
         </div>
       </form>
     </div>
