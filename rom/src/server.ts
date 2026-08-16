@@ -437,7 +437,7 @@ fastify.get('/api/scopes', async (request, reply) => {
 
 // POST /api/scopes
 fastify.post('/api/scopes', async (request, reply) => {
-  const { scope_name, estimated_output_tokens, fallback_scope_id, system_prompt, model_mappings } = request.body as any;
+  const { scope_name, estimated_output_tokens, fallback_scope_id, model_mappings } = request.body as any;
   if (!scope_name) {
     reply.status(400);
     return { error: 'Nama scope wajib diisi!' };
@@ -446,9 +446,9 @@ fastify.post('/api/scopes', async (request, reply) => {
   try {
     await client.query('BEGIN');
     const scopeRes = await client.query(
-      `INSERT INTO scopes (scope_name, estimated_output_tokens, fallback_scope_id, system_prompt) 
-       VALUES ($1, $2, $3, $4) ON CONFLICT (scope_name) DO UPDATE SET estimated_output_tokens=EXCLUDED.estimated_output_tokens, fallback_scope_id=EXCLUDED.fallback_scope_id, system_prompt=EXCLUDED.system_prompt RETURNING id`,
-      [scope_name, parseInt(estimated_output_tokens || 400), fallback_scope_id || null, system_prompt || null]
+      `INSERT INTO scopes (scope_name, estimated_output_tokens, fallback_scope_id) 
+       VALUES ($1, $2, $3) ON CONFLICT (scope_name) DO UPDATE SET estimated_output_tokens=EXCLUDED.estimated_output_tokens, fallback_scope_id=EXCLUDED.fallback_scope_id RETURNING id`,
+      [scope_name, parseInt(estimated_output_tokens || 400), fallback_scope_id || null]
     );
     const scopeId = scopeRes.rows[0].id;
     await client.query('DELETE FROM scope_models WHERE scope_id = $1', [scopeId]);
@@ -465,6 +465,57 @@ fastify.post('/api/scopes', async (request, reply) => {
     return { error: 'Gagal menyimpan scope.' };
   } finally {
     client.release();
+  }
+});
+
+// PUT /api/scopes/:id
+fastify.put('/api/scopes/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const { scope_name, estimated_output_tokens, fallback_scope_id, model_mappings } = request.body as any;
+  if (!scope_name) {
+    reply.status(400);
+    return { error: 'Nama scope wajib diisi!' };
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const scopeRes = await client.query(
+      `UPDATE scopes 
+       SET scope_name = $1, estimated_output_tokens = $2, fallback_scope_id = $3 
+       WHERE id = $4 RETURNING id`,
+      [scope_name, parseInt(estimated_output_tokens || 400), fallback_scope_id || null, id]
+    );
+    if (scopeRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      reply.status(404);
+      return { error: 'Scope tidak ditemukan.' };
+    }
+    await client.query('DELETE FROM scope_models WHERE scope_id = $1', [id]);
+    if (model_mappings && Array.isArray(model_mappings)) {
+      for (const m of model_mappings) {
+        await client.query('INSERT INTO scope_models (scope_id, model_id, priority) VALUES ($1, $2, $3)', [id, m.model_id, parseInt(m.priority)]);
+      }
+    }
+    await client.query('COMMIT');
+    return { success: true };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    reply.status(500);
+    return { error: 'Gagal memperbarui scope.' };
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/scopes/:id
+fastify.delete('/api/scopes/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  try {
+    await pool.query('DELETE FROM scopes WHERE id = $1', [id]);
+    return { success: true, id };
+  } catch (error) {
+    reply.status(500);
+    return { error: 'Gagal menghapus scope.' };
   }
 });
 
@@ -867,9 +918,6 @@ fastify.post('/api/route', async (request, reply) => {
         : prompt;
 
       let messages: UnifiedMessage[] = [{ role: 'user' as const, content: promptToUse }];
-      if (currentScope.system_prompt) {
-        messages.unshift({ role: 'system' as const, content: currentScope.system_prompt });
-      }
 
       const unifiedRequest: UnifiedRequest = {
         model: model.model_identifier,

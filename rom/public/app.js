@@ -231,10 +231,6 @@ async function loadScopesData() {
         ? `<span class="badge badge-blue">${escapeHtml(scope.fallback_scope_name)}</span>` 
         : '<span style="color:var(--text-muted);">Tidak Ada</span>';
         
-      const promptSnippet = scope.system_prompt 
-        ? `<span style="font-size:0.85rem; color:var(--text-muted);" title="${escapeHtml(scope.system_prompt)}">${escapeHtml(scope.system_prompt.slice(0, 30))}...</span>`
-        : '<span style="color:var(--text-muted); font-size:0.85rem;">Default</span>';
-
       // Build model mapping badges list sorted by priority
       let modelsBadgeList = '';
       if (scope.mapped_models && scope.mapped_models.length > 0) {
@@ -254,9 +250,12 @@ async function loadScopesData() {
       tr.innerHTML = `
         <td style="font-weight:600; font-family:monospace;">${escapeHtml(scope.scope_name)}</td>
         <td>${scope.estimated_output_tokens}</td>
-        <td>${promptSnippet}</td>
         <td>${fallbackStr}</td>
         <td>${modelsBadgeList}</td>
+        <td class="actions-cell">
+          <button class="btn-action btn-green" onclick="openEditScopeModal('${scope.id}')">📝 Edit</button>
+          <button class="btn-action btn-secondary" style="background:#fecaca; color:#b91c1c;" onclick="deleteScope('${scope.id}', '${escapeHtml(scope.scope_name)}')">🗑️ Hapus</button>
+        </td>
       `;
       tbody.appendChild(tr);
     });
@@ -274,6 +273,8 @@ function openModal(modalId) {
   if (modalId === 'modelModal') {
     populateApiKeyDropdown();
   } else if (modalId === 'scopeModal') {
+    document.getElementById('s-id').value = '';
+    document.getElementById('scopeModalTitleAction').textContent = 'Tambah';
     populateScopeModalData();
   }
 }
@@ -478,16 +479,18 @@ document.getElementById('modelForm').addEventListener('submit', async (e) => {
 // 3. Submit Scope
 document.getElementById('scopeForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const id = document.getElementById('s-id').value;
   const scope_name = document.getElementById('s-name').value;
   const estimated_output_tokens = document.getElementById('s-eto').value || 400;
-  const system_prompt = document.getElementById('s-prompt').value || null;
   const fallback_scope_id = document.getElementById('s-fallback').value || null;
 
   try {
-    await apiFetch('/api/scopes', {
-      method: 'POST',
+    const url = id ? `/api/scopes/${id}` : '/api/scopes';
+    const method = id ? 'PUT' : 'POST';
+    await apiFetch(url, {
+      method,
       body: JSON.stringify({
-        scope_name, estimated_output_tokens, fallback_scope_id, system_prompt,
+        scope_name, estimated_output_tokens, fallback_scope_id,
         model_mappings: currentScopeModels
       })
     });
@@ -829,6 +832,63 @@ document.getElementById('editModelForm').addEventListener('submit', async (e) =>
     console.error(err);
   }
 });
+
+// --- 7.5. EDIT & DELETE SCOPE HELPERS ---
+async function deleteScope(scopeId, name) {
+  if (!confirm(`Apakah Anda yakin ingin menghapus scope "${name}" secara permanen?`)) {
+    return;
+  }
+  try {
+    await apiFetch(`/api/scopes/${scopeId}`, { method: 'DELETE' });
+    loadScopesData();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function openEditScopeModal(scopeId) {
+  const scope = scopesList.find(s => s.id === scopeId);
+  if (!scope) return;
+
+  // Set action title to Edit
+  document.getElementById('scopeModalTitleAction').textContent = 'Edit';
+  
+  // Set form fields
+  document.getElementById('s-id').value = scope.id;
+  document.getElementById('s-name').value = scope.scope_name;
+  document.getElementById('s-eto').value = scope.estimated_output_tokens || 400;
+
+  // Populate dropdowns first (fallback list & model selector)
+  await populateScopeModalData();
+
+  // Set fallback scope value (exclude itself from options to prevent circular dependency)
+  const fallbackDropdown = document.getElementById('s-fallback');
+  fallbackDropdown.value = scope.fallback_scope_id || '';
+  
+  // Filter out itself from fallback options
+  for (let option of fallbackDropdown.options) {
+    if (option.value === scope.id) {
+      option.remove();
+    }
+  }
+
+  // Load existing mapped models into currentScopeModels list
+  currentScopeModels = [];
+  if (scope.mapped_models && Array.isArray(scope.mapped_models)) {
+    scope.mapped_models.forEach(sm => {
+      currentScopeModels.push({
+        model_id: sm.model_id,
+        model_identifier: sm.model_identifier,
+        priority: sm.priority
+      });
+    });
+  }
+  renderScopeModelList();
+
+  // Show modal
+  const modal = document.getElementById('scopeModal');
+  if (modal) modal.classList.remove('hidden');
+}
 
 // --- 8. AUTO-REFRESH INTERVAL (POLLING BACKGROUND) ---
 // Melakukan reload data secara asinkronus setiap 5 detik sesuai tab menu yang aktif.

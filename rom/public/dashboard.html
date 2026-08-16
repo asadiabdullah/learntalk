@@ -185,9 +185,9 @@ Content-Type: application/json
                 <tr>
                   <th>Nama Scope</th>
                   <th>Estimated Output Tokens</th>
-                  <th>System Prompt</th>
                   <th>Fallback Scope</th>
                   <th>Urutan Prioritas Model (Priority List)</th>
+                  <th>Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -517,10 +517,11 @@ Content-Type: application/json
   <div id="scopeModal" class="modal-overlay hidden">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Tambah / Edit Scope Baru</h3>
+        <h3><span id="scopeModalTitleAction">Tambah</span> Scope & Pemetaan Model</h3>
         <button class="btn-close" onclick="closeModal('scopeModal')">&times;</button>
       </div>
       <form id="scopeForm">
+        <input type="hidden" id="s-id">
         <div class="modal-body">
           <div class="form-group">
             <label for="s-name">Nama Scope (Unique Identifier)</label>
@@ -529,10 +530,6 @@ Content-Type: application/json
           <div class="form-group">
             <label for="s-eto">Estimated Output Tokens (ETO / Buffer Kuota)</label>
             <input type="number" id="s-eto" required value="400" min="1" placeholder="400">
-          </div>
-          <div class="form-group">
-            <label for="s-prompt">System Prompt</label>
-            <textarea id="s-prompt" rows="3" placeholder="Masukkan instruksi dasar bagi LLM untuk scope ini (opsional)"></textarea>
           </div>
           <div class="form-group">
             <label for="s-fallback">Fallback Scope (Pilih scope cadangan jika seluruh model scope utama penuh)</label>

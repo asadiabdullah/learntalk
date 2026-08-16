@@ -66,7 +66,6 @@ CREATE TABLE scopes (
     scope_name VARCHAR(255) UNIQUE NOT NULL, -- Nama scope unik, misal: embedding_model
     estimated_output_tokens INTEGER DEFAULT 400, -- Default buffer token keluaran
     fallback_scope_id UUID REFERENCES scopes(id) ON DELETE SET NULL, -- Scope cadangan jika semua model gagal
-    system_prompt TEXT DEFAULT NULL, -- System prompt opsional
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
