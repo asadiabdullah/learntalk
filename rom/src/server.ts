@@ -503,6 +503,8 @@ fastify.post('/api/models/test', async (request, reply) => {
 
   try {
     const decryptedKey = decrypt(currentModel.secret_key);
+    console.log(`[DEBUG] Model identifier: ${currentModel.model_identifier}, Provider: ${currentModel.provider}`);
+    console.log(`[DEBUG] Decrypted API Key length: ${decryptedKey.length}, prefix: ${decryptedKey.slice(0, 10)}..., suffix: ...${decryptedKey.slice(-10)}`);
     const baseUrl = getBaseUrl(currentModel.provider);
     const config = getProviderConfig(currentModel.provider);
     const modelType = currentModel.model_type || 'text_out';
