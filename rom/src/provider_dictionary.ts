@@ -89,7 +89,15 @@ export const ProviderDictionary: Record<string, ProviderConfig> = {
       return payload;
     },
     parseResponseText: (data) => {
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const parts = data.candidates?.[0]?.content?.parts;
+      if (parts && Array.isArray(parts)) {
+        const contentParts = parts.filter((p: any) => !p.thought);
+        if (contentParts.length > 0) {
+          return contentParts.map((p: any) => p.text).join('').trim();
+        }
+        return parts[0]?.text || '';
+      }
+      return '';
     },
     parseUsage: (data) => {
       if (data.usageMetadata) {

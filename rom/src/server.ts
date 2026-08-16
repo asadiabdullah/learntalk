@@ -1028,13 +1028,15 @@ fastify.post('/api/route', async (request, reply) => {
               const chunkStr = Buffer.isBuffer(chunk) ? chunk.toString() : new TextDecoder().decode(chunk);
               
               if (model.provider === 'gemini') {
-                const match = chunkStr.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-                if (match) {
-                  try { 
-                    const textDelta = JSON.parse(`"${match[1]}"`);
-                    accumulatedText += textDelta;
-                    reply.raw.write(`data: ${JSON.stringify({ choices: [{ delta: { content: textDelta } }] })}\n\n`);
-                  } catch {}
+                if (!chunkStr.includes('"thought": true') && !chunkStr.includes('"thought":true')) {
+                  const match = chunkStr.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                  if (match) {
+                    try { 
+                      const textDelta = JSON.parse(`"${match[1]}"`);
+                      accumulatedText += textDelta;
+                      reply.raw.write(`data: ${JSON.stringify({ choices: [{ delta: { content: textDelta } }] })}\n\n`);
+                    } catch {}
+                  }
                 }
               } else {
                 buffer += chunkStr;
