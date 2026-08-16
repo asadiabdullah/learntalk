@@ -231,7 +231,11 @@ if (supabase) {
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === "SIGNED_IN") {
       await loadUserProfile(session.user.id, session.user.email);
-      showDashboard();
+      // Hanya tampilkan dashboard jika saat ini berada di halaman login/auth
+      const dashboardView = document.getElementById("dashboard-view");
+      if (dashboardView && dashboardView.classList.contains("hidden")) {
+        showDashboard();
+      }
     } else if (event === "SIGNED_OUT") {
       window.userProfile = null;
       showAuth();
