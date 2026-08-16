@@ -783,14 +783,14 @@ const DUMMY_RESPONSES = {
   ]
 };
 
-// --- LOGIKA ASISTEN INPUT (KOREKSI & TERJEMAH) ---
-let isTranslationActive = false;
+// --- LOGIKA ASISTEN INPUT (KOREKSI & INGAT) ---
+let isRememberActive = false;
 let isAssistanceOpen = false;
 
 const btnToggleAssistance = document.getElementById("btn-toggle-assistance");
 const inputAssistancePanel = document.getElementById("input-assistance");
 const btnAssistCorrection = document.getElementById("btn-assist-correction");
-const btnAssistTranslation = document.getElementById("btn-assist-translation");
+const btnAssistRemember = document.getElementById("btn-assist-remember");
 
 if (btnToggleAssistance) {
   btnToggleAssistance.addEventListener("click", () => {
@@ -818,15 +818,15 @@ if (btnAssistCorrection) {
   });
 }
 
-if (btnAssistTranslation) {
-  btnAssistTranslation.addEventListener("click", () => {
-    isTranslationActive = !isTranslationActive;
-    if (isTranslationActive) {
-      btnAssistTranslation.classList.add("active");
-      showToast("Mode Terjemah Aktif: Pesan Anda akan diterjemahkan sebelum dikirim.", "info");
+if (btnAssistRemember) {
+  btnAssistRemember.addEventListener("click", () => {
+    isRememberActive = !isRememberActive;
+    if (isRememberActive) {
+      btnAssistRemember.classList.add("active");
+      showToast("Mode Ingat Aktif: Percakapan penting akan ditandai untuk diingat.", "info");
     } else {
-      btnAssistTranslation.classList.remove("active");
-      showToast("Mode Terjemah Dinonaktifkan.", "info");
+      btnAssistRemember.classList.remove("active");
+      showToast("Mode Ingat Dinonaktifkan.", "info");
     }
   });
 }
@@ -879,14 +879,14 @@ function handleSendMessage() {
   // Masukkan pesan user ke memory cache
   if (!messagesData[activePersonaId]) messagesData[activePersonaId] = [];
   
-  // Jika Mode Koreksi / Terjemah Aktif, tambahkan penanda dummy
+  // Jika Mode Koreksi / Ingat Aktif, tambahkan penanda dummy
   let finalMessage = text;
-  if (isCorrectionActive && isTranslationActive) {
-    finalMessage = `${text} (Telah dikoreksi & diterjemahkan)`;
+  if (isCorrectionActive && isRememberActive) {
+    finalMessage = `${text} (Telah dikoreksi & ditandai untuk diingat)`;
   } else if (isCorrectionActive) {
     finalMessage = `${text} (Telah dikoreksi otomatis)`;
-  } else if (isTranslationActive) {
-    finalMessage = `${text} (Telah diterjemahkan otomatis)`;
+  } else if (isRememberActive) {
+    finalMessage = `${text} (Telah ditandai untuk diingat)`;
   }
     
   messagesData[activePersonaId].push({
