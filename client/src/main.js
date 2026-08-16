@@ -1695,38 +1695,29 @@ window.openChat = function(id) {
   console.log("Membuka chat dengan ID:", id);
   window.revealChatArea();
   
-  // Update UI Header
-  const activeChatName = document.querySelector(".chat-header-info h2");
-  const activeChatStatus = document.querySelector(".chat-header-info p");
-  const activeChatAvatarContainer = document.querySelector(".chat-header-profile");
-  
-  activeChatName.textContent = p.name;
-  activeChatStatus.textContent = `Online (${p.language === 'en' ? 'Inggris' : 'Jepang'})`;
-  
-  // Bersihkan avatar header lama
-  const existingAvatar = activeChatAvatarContainer.querySelector(".avatar");
-  if (existingAvatar) existingAvatar.remove();
-  
-  // Buat avatar header baru
-  let avatarHtml = "";
-  if (p.avatar_url) {
-    avatarHtml = `<img src="${p.avatar_url}" alt="${p.name}" class="avatar" style="object-fit:cover; margin-right:12px;">`;
-  } else {
-    avatarHtml = `<div class="avatar avatar--user" style="margin-right:12px;">${p.name.charAt(0).toUpperCase()}</div>`;
+  // Render header kontak secara dinamis ke dalam #chat-header-profile
+  const headerProfile = document.getElementById("chat-header-profile");
+  if (headerProfile) {
+    const avatarHtml = p.avatar_url
+      ? `<img src="${p.avatar_url}" alt="${p.name}" class="avatar" style="object-fit:cover; flex-shrink:0;">`
+      : `<div class="avatar avatar--user" style="flex-shrink:0;">${p.name.charAt(0).toUpperCase()}</div>`;
+    headerProfile.innerHTML = `
+      ${avatarHtml}
+      <div class="chat-header-info" style="margin-left:12px;">
+        <h2>${p.name}</h2>
+        <p>Online (${p.language === 'en' ? 'Inggris' : 'Jepang'})</p>
+      </div>
+    `;
   }
-  activeChatAvatarContainer.insertAdjacentHTML("afterbegin", avatarHtml);
   
-  // Update header dropdown untuk Tanya Leta
-  const headerMenu = document.getElementById("menu-chat-header");
-  if (headerMenu) {
-    const thirdLink = headerMenu.querySelectorAll("a")[2];
-    if (thirdLink) {
-      thirdLink.textContent = "Tanya Leta";
-      thirdLink.setAttribute("onclick", "openAskLetaModal(); event.stopPropagation(); return false;");
-    }
+  // Update menu dropdown: item ketiga = Tanya Leta
+  const thirdAction = document.getElementById("menu-chat-header-third-action");
+  if (thirdAction) {
+    thirdAction.textContent = "Tanya Leta";
+    thirdAction.setAttribute("onclick", "openAskLetaModal(); event.stopPropagation(); return false;");
   }
 
-  // Tampilkan Asisten Input & Chevron
+  // Tampilkan Asisten Input
   const btnToggleAssistance = document.getElementById("btn-toggle-assistance");
   if (btnToggleAssistance) btnToggleAssistance.style.display = "grid";
   
@@ -1775,38 +1766,29 @@ window.openExam = function(id) {
   console.log("Membuka ujian dengan ID:", id);
   window.revealChatArea();
   
-  // Update UI Header
-  const activeChatName = document.querySelector(".chat-header-info h2");
-  const activeChatStatus = document.querySelector(".chat-header-info p");
-  const activeChatAvatarContainer = document.querySelector(".chat-header-profile");
-  
-  activeChatName.textContent = e.name;
-  activeChatStatus.textContent = `Online (Ujian ${e.language === 'en' ? 'Inggris' : 'Jepang'})`;
-  
-  // Bersihkan avatar header lama
-  const existingAvatar = activeChatAvatarContainer.querySelector(".avatar");
-  if (existingAvatar) existingAvatar.remove();
-  
-  // Buat avatar header baru
-  let avatarHtml = "";
-  if (e.avatar_url) {
-    avatarHtml = `<img src="${e.avatar_url}" alt="${e.name}" class="avatar" style="object-fit:cover; margin-right:12px;">`;
-  } else {
-    avatarHtml = `<div class="avatar avatar--purple" style="margin-right:12px;">${e.name.charAt(0).toUpperCase()}</div>`;
-  }
-  activeChatAvatarContainer.insertAdjacentHTML("afterbegin", avatarHtml);
-  
-  // Update header dropdown untuk Lihat Laporan
-  const headerMenu = document.getElementById("menu-chat-header");
-  if (headerMenu) {
-    const thirdLink = headerMenu.querySelectorAll("a")[2];
-    if (thirdLink) {
-      thirdLink.textContent = "Lihat Laporan";
-      thirdLink.setAttribute("onclick", `openViewReportModal('${id}'); event.stopPropagation(); return false;`);
-    }
+  // Render header ujian secara dinamis ke dalam #chat-header-profile
+  const headerProfile = document.getElementById("chat-header-profile");
+  if (headerProfile) {
+    const avatarHtml = e.avatar_url
+      ? `<img src="${e.avatar_url}" alt="${e.name}" class="avatar" style="object-fit:cover; flex-shrink:0;">`
+      : `<div class="avatar avatar--purple" style="flex-shrink:0;">${e.name.charAt(0).toUpperCase()}</div>`;
+    headerProfile.innerHTML = `
+      ${avatarHtml}
+      <div class="chat-header-info" style="margin-left:12px;">
+        <h2>${e.name}</h2>
+        <p>Online (Ujian ${e.language === 'en' ? 'Inggris' : 'Jepang'})</p>
+      </div>
+    `;
   }
 
-  // Sembunyikan Asisten Input & Chevron
+  // Update menu dropdown: item ketiga = Lihat Laporan
+  const thirdAction = document.getElementById("menu-chat-header-third-action");
+  if (thirdAction) {
+    thirdAction.textContent = "Lihat Laporan";
+    thirdAction.setAttribute("onclick", `openViewReportModal('${id}'); event.stopPropagation(); return false;`);
+  }
+
+  // Sembunyikan Asisten Input & Chevron (Ujian tidak punya mode koreksi/ingat)
   const btnToggleAssistance = document.getElementById("btn-toggle-assistance");
   const inputAssistancePanel = document.getElementById("input-assistance");
   if (btnToggleAssistance) btnToggleAssistance.style.display = "none";

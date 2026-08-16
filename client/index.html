@@ -160,21 +160,17 @@
                 <!-- Chat Header -->
                 <header class="chat-header hidden" id="chat-header-section">
                     <button class="icon-button back-button" id="btn-back-sidebar" onclick="closeChatMobile()"><i class="fa-solid fa-arrow-left"></i></button>
-                    <div class="chat-header-profile">
-                        <div class="avatar avatar--purple">E</div>
-                        <div class="chat-header-info">
-                            <h2>English Tutor (ROM)</h2>
-                            <p>Online (Agnostic Proxy)</p>
-                        </div>
+                    <div class="chat-header-profile" id="chat-header-profile">
+                        <!-- Avatar dan info kontak akan diisi secara dinamis oleh JS -->
                     </div>
                     <div class="chat-header-actions">
-                        <button class="icon-button"><i class="fa-solid fa-phone"></i></button>
+                        <button class="icon-button" id="btn-call-header"><i class="fa-solid fa-phone"></i></button>
                         <div style="position: relative;">
                             <button class="icon-button" onclick="event.stopPropagation(); toggleMenu('menu-chat-header')"><i class="fa-solid fa-ellipsis-vertical"></i></button>
                             <div class="dropdown-menu dropdown-right" id="menu-chat-header">
                                 <a href="#">Hapus chat</a>
                                 <a href="#">Edit kontak</a>
-                                <a href="#" onclick="openAskLetaModal(); event.stopPropagation(); return false;">Tanya Leta</a>
+                                <a href="#" id="menu-chat-header-third-action" onclick="openAskLetaModal(); event.stopPropagation(); return false;">Tanya Leta</a>
                             </div>
                         </div>
                     </div>

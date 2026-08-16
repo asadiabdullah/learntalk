@@ -21,6 +21,13 @@
   box-sizing: border-box;
 }
 
+/* Kelas hidden universal - menyembunyikan elemen dari tampilan */
+#chat-header-section.hidden,
+#chat-messages.hidden,
+#chat-input-area-section.hidden {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
