@@ -600,15 +600,22 @@ fastify.post('/api/models/test', async (request, reply) => {
       promptTokens = countTokens("Test speech generation output");
     }
     else if (modelType === 'audio_native_dialog') {
-      url = `${baseUrl}${config.endpoint(currentModel.model_identifier, false)}`;
-      promptText = 'Jawab halo saja.';
-      promptTokens = countTokens(promptText);
-      const unifiedRequest: UnifiedRequest = {
-        model: currentModel.model_identifier,
-        messages: [{ role: 'user', content: promptText }],
-        temperature: 0.2, max_tokens: 50, stream: false
-      };
-      payload = config.mapRequest(unifiedRequest, true);
+      if (currentModel.provider === 'gemini') {
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel.model_identifier}?key=${decryptedKey}`;
+        requestMethod = 'GET';
+        payload = {};
+        delete headers['Authorization'];
+      } else {
+        url = `${baseUrl}${config.endpoint(currentModel.model_identifier, false)}`;
+        promptText = 'Jawab halo saja.';
+        promptTokens = countTokens(promptText);
+        const unifiedRequest: UnifiedRequest = {
+          model: currentModel.model_identifier,
+          messages: [{ role: 'user', content: promptText }],
+          temperature: 0.2, max_tokens: 50, stream: false
+        };
+        payload = config.mapRequest(unifiedRequest, true);
+      }
     }
     else if (modelType === 'translator') {
       url = `${baseUrl}${config.endpoint(currentModel.model_identifier, false)}`;
@@ -734,8 +741,13 @@ fastify.post('/api/models/test', async (request, reply) => {
         outputTokens = Math.ceil((parsedBody.size_bytes || 0) / 4);
       } 
       else if (modelType === 'audio_native_dialog' || modelType === 'translator') {
-        responseText = config.parseResponseText(parsedBody);
-        outputTokens = countTokens(responseText);
+        if (currentModel.provider === 'gemini' && modelType === 'audio_native_dialog') {
+          responseText = `Live API Model connected successfully. Supported input modalities: ${parsedBody.inputModalities?.join(', ') || 'unknown'}`;
+          outputTokens = 1;
+        } else {
+          responseText = config.parseResponseText(parsedBody);
+          outputTokens = countTokens(responseText);
+        }
       } 
       else {
         // text_out
