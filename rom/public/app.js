@@ -90,7 +90,9 @@ async function loadOverviewData() {
 // --- 2. PROVIDERS / API KEYS VIEW DATA ---
 async function loadProvidersData() {
   const tbody = document.querySelector('#providerTable tbody');
-  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Memuat data...</td></tr>';
+  if (tbody.children.length === 0 || tbody.textContent.includes('Belum ada provider') || tbody.textContent.includes('Memuat')) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Memuat data...</td></tr>';
+  }
 
   try {
     apiKeysList = await apiFetch('/api/api-keys');
@@ -124,9 +126,13 @@ async function loadProvidersData() {
 }
 
 // --- 3. MODELS VIEW DATA ---
+// --- 3. MODELS VIEW DATA ---
 async function loadModelsData() {
   const tbody = document.querySelector('#modelTable tbody');
-  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Memuat data...</td></tr>';
+  // Hanya tampilkan loading jika tabel kosong
+  if (tbody.children.length === 0 || tbody.textContent.includes('Belum ada model') || tbody.textContent.includes('Memuat')) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Memuat data...</td></tr>';
+  }
 
   try {
     modelsList = await apiFetch('/api/models');
@@ -175,7 +181,12 @@ async function loadModelsData() {
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td style="font-weight:600; font-family:monospace;">${escapeHtml(model.model_identifier)}</td>
+        <td style="font-weight:600; font-family:monospace;">
+          ${escapeHtml(model.model_identifier)}
+          <div style="font-size:0.7rem; color:var(--text-muted); font-weight:normal; margin-top:3px;">
+            Type: <span class="badge badge-blue" style="font-size:0.65rem; padding:1px 5px; text-transform:uppercase;">${escapeHtml(model.model_type || 'text_out')}</span>
+          </div>
+        </td>
         <td>${escapeHtml(model.api_key_name)}</td>
         <td style="font-family:monospace; font-size:0.775rem; line-height:1.3;">${rateUsageStr}</td>
         <td style="font-family:monospace; font-size:0.775rem; line-height:1.3;">${tokenUsageStr}</td>
@@ -198,7 +209,9 @@ async function loadModelsData() {
 // --- 4. SCOPES VIEW DATA ---
 async function loadScopesData() {
   const tbody = document.querySelector('#scopeTable tbody');
-  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Memuat data...</td></tr>';
+  if (tbody.children.length === 0 || tbody.textContent.includes('Belum ada scope') || tbody.textContent.includes('Memuat')) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Memuat data...</td></tr>';
+  }
 
   try {
     scopesList = await apiFetch('/api/scopes');
@@ -432,6 +445,7 @@ document.getElementById('modelForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const api_key_id = document.getElementById('m-apiKey').value;
   const model_identifier = document.getElementById('m-identifier').value;
+  const model_type = document.getElementById('m-type').value;
   const rpm = document.getElementById('m-rpm').value || 0;
   const rph = document.getElementById('m-rph').value || 0;
   const rpd = document.getElementById('m-rpd').value || 0;
@@ -445,7 +459,7 @@ document.getElementById('modelForm').addEventListener('submit', async (e) => {
     await apiFetch('/api/models', {
       method: 'POST',
       body: JSON.stringify({
-        api_key_id, model_identifier,
+        api_key_id, model_identifier, model_type,
         rpm, rph, rpd, rpmo,
         tkm, tkh, tkd, tkmo
       })
@@ -625,7 +639,9 @@ ${JSON.stringify(data.headers, null, 2)}`;
 // --- 6. LOGS VIEW DATA ---
 async function loadLogsData() {
   const tbody = document.querySelector('#logTable tbody');
-  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Memuat data log...</td></tr>';
+  if (tbody.children.length === 0 || tbody.textContent.includes('Belum ada log') || tbody.textContent.includes('Memuat')) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Memuat data log...</td></tr>';
+  }
 
   try {
     const logs = await apiFetch('/api/logs');
@@ -695,6 +711,7 @@ function openEditModelModal(modelId) {
 
   document.getElementById('edit-m-id').value = model.id;
   document.getElementById('edit-m-identifier').value = model.model_identifier;
+  document.getElementById('edit-m-type').value = model.model_type || 'text_out';
   document.getElementById('edit-m-status').value = model.status;
   document.getElementById('edit-m-errorCount').value = model.error_count || 0;
   
@@ -726,6 +743,7 @@ document.getElementById('editModelForm').addEventListener('submit', async (e) =>
   e.preventDefault();
   const id = document.getElementById('edit-m-id').value;
   const model_identifier = document.getElementById('edit-m-identifier').value;
+  const model_type = document.getElementById('edit-m-type').value;
   const status = document.getElementById('edit-m-status').value;
   const error_count = document.getElementById('edit-m-errorCount').value;
   const quarantine_until = document.getElementById('edit-m-quarantine').value || null;
@@ -743,7 +761,7 @@ document.getElementById('editModelForm').addEventListener('submit', async (e) =>
     await apiFetch(`/api/models/${id}`, {
       method: 'PUT',
       body: JSON.stringify({
-        model_identifier, status, error_count, quarantine_until,
+        model_identifier, model_type, status, error_count, quarantine_until,
         rpm, rph, rpd, rpmo,
         tkm, tkh, tkd, tkmo
       })
@@ -757,15 +775,19 @@ document.getElementById('editModelForm').addEventListener('submit', async (e) =>
 
 // --- 8. AUTO-REFRESH INTERVAL (POLLING BACKGROUND) ---
 // Melakukan reload data secara asinkronus setiap 5 detik sesuai tab menu yang aktif.
-// Ini memicu lazy reset di database secara berkala dan membuat UI selalu segar.
+// Ini memicu lazy reset di database secara berkala dan membuat UI selalu segar secara bebas kedipan (flicker-free).
 setInterval(() => {
   const activeLink = document.querySelector('.sidebar-link.active');
   if (!activeLink) return;
   const clickAttr = activeLink.getAttribute('onclick') || '';
   if (clickAttr.includes('overview')) {
     loadOverviewData();
+  } else if (clickAttr.includes('providers')) {
+    loadProvidersData();
   } else if (clickAttr.includes('models')) {
     loadModelsData();
+  } else if (clickAttr.includes('scopes')) {
+    loadScopesData();
   } else if (clickAttr.includes('logs')) {
     loadLogsData();
   }

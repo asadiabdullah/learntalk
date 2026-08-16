@@ -301,6 +301,16 @@ Content-Type: application/json
             <label for="m-identifier">Model Identifier (Persis seperti parameter API)</label>
             <input type="text" id="m-identifier" required placeholder="Contoh: gemini-1.5-flash atau llama3-8b-8192">
           </div>
+          <div class="form-group">
+            <label for="m-type">Tipe Model (Model Type)</label>
+            <select id="m-type" required>
+              <option value="text_out">text_out (Model Generasi Teks / Chat)</option>
+              <option value="embedding">embedding (Model Vektor RAG)</option>
+              <option value="text_to_speech">text_to_speech (TTS / Suara)</option>
+              <option value="audio_native_dialog">audio_native_dialog (Live API)</option>
+              <option value="translator">translator (Penerjemah)</option>
+            </select>
+          </div>
           
           <h4 style="margin: 15px 0 10px 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Konfigurasi Limit Rate</h4>
           <div class="form-row">
@@ -367,6 +377,16 @@ Content-Type: application/json
           <div class="form-group">
             <label for="edit-m-identifier">Model Identifier</label>
             <input type="text" id="edit-m-identifier" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-m-type">Tipe Model (Model Type)</label>
+            <select id="edit-m-type" required>
+              <option value="text_out">text_out</option>
+              <option value="embedding">embedding</option>
+              <option value="text_to_speech">text_to_speech</option>
+              <option value="audio_native_dialog">audio_native_dialog</option>
+              <option value="translator">translator</option>
+            </select>
           </div>
           
           <div class="form-row">
