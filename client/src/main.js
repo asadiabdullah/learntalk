@@ -1037,6 +1037,7 @@ window.editPersona = function(id) {
 // CHATBOT ACTIVE CHAT LOGIC (DUMMY SYSTEM)
 // ==========================================
 let activePersonaId = null;
+let activeExamId = null;
 let messagesData = {}; // Cache obrolan: { personaId: [ { sender, text, translation, tokens } ] }
 let isCorrectionActive = false;
 let activeWordCardTokens = [];
