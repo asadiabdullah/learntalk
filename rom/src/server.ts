@@ -566,6 +566,7 @@ fastify.post('/api/models/test', async (request, reply) => {
     let payload: any = {};
     let promptText = '';
     let promptTokens = 0;
+    let requestMethod = 'POST';
 
     // --- SETUP REQUEST BERDASARKAN MODEL_TYPE ---
     if (modelType === 'embedding') {
@@ -573,6 +574,13 @@ fastify.post('/api/models/test', async (request, reply) => {
         url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel.model_identifier}:embedContent?key=${decryptedKey}`;
         payload = { content: { parts: [{ text: "Test embedding content" }] } };
         delete headers['Authorization'];
+      } else if (currentModel.provider === 'cohere') {
+        url = 'https://api.cohere.ai/v1/embed';
+        payload = {
+          texts: ["Test embedding content"],
+          model: currentModel.model_identifier,
+          input_type: "search_query"
+        };
       } else {
         url = `${baseUrl}/v1/embeddings`;
         payload = { input: "Test embedding content", model: currentModel.model_identifier };
@@ -581,8 +589,10 @@ fastify.post('/api/models/test', async (request, reply) => {
     } 
     else if (modelType === 'text_to_speech') {
       if (currentModel.provider === 'gemini') {
-        url = `${baseUrl}/v1/models/${currentModel.model_identifier}`; // Fallback model info
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel.model_identifier}?key=${decryptedKey}`; // Fallback model info
+        requestMethod = 'GET';
         payload = {};
+        delete headers['Authorization'];
       } else {
         url = `${baseUrl}/v1/audio/speech`;
         payload = { model: currentModel.model_identifier, input: "Test speech generation output", voice: "alloy" };
@@ -590,24 +600,26 @@ fastify.post('/api/models/test', async (request, reply) => {
       promptTokens = countTokens("Test speech generation output");
     }
     else if (modelType === 'audio_native_dialog') {
-      url = `${baseUrl}/v1/chat/completions`; // Fallback standard chatcompletion
+      url = `${baseUrl}${config.endpoint(currentModel.model_identifier, false)}`;
+      promptText = 'Jawab halo saja.';
+      promptTokens = countTokens(promptText);
       const unifiedRequest: UnifiedRequest = {
         model: currentModel.model_identifier,
-        messages: [{ role: 'user', content: 'Say hello' }],
+        messages: [{ role: 'user', content: promptText }],
         temperature: 0.2, max_tokens: 50, stream: false
       };
       payload = config.mapRequest(unifiedRequest, true);
-      promptTokens = countTokens("Say hello");
     }
     else if (modelType === 'translator') {
-      url = `${baseUrl}/v1/chat/completions`; // Fallback standard chatcompletion
+      url = `${baseUrl}${config.endpoint(currentModel.model_identifier, false)}`;
+      promptText = 'Translate this phrase to Indonesian: "Hello, how are you?"';
+      promptTokens = countTokens(promptText);
       const unifiedRequest: UnifiedRequest = {
         model: currentModel.model_identifier,
-        messages: [{ role: 'user', content: 'Translate: Hello' }],
-        temperature: 0.2, max_tokens: 50, stream: false
+        messages: [{ role: 'user', content: promptText }],
+        temperature: 0.2, max_tokens: 100, stream: false
       };
       payload = config.mapRequest(unifiedRequest, true);
-      promptTokens = countTokens("Translate: Hello");
     }
     else {
       // Default: 'text_out'
@@ -629,7 +641,14 @@ fastify.post('/api/models/test', async (request, reply) => {
     }
 
     let rawResult: any = {};
-    let response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
+    const fetchOptions: any = {
+      method: requestMethod,
+      headers
+    };
+    if (requestMethod === 'POST') {
+      fetchOptions.body = JSON.stringify(payload);
+    }
+    let response = await fetch(url, fetchOptions);
     let statusCode = response.status;
     let responseHeaders: Record<string, string> = {};
     response.headers.forEach((val, key) => {
@@ -698,6 +717,10 @@ fastify.post('/api/models/test', async (request, reply) => {
       if (modelType === 'embedding') {
         if (currentModel.provider === 'gemini') {
           const vals = parsedBody.embedding?.values || [];
+          responseText = `Embedding values generated. Size: ${vals.length}`;
+          outputTokens = vals.length;
+        } else if (currentModel.provider === 'cohere') {
+          const vals = parsedBody.embeddings?.[0] || [];
           responseText = `Embedding values generated. Size: ${vals.length}`;
           outputTokens = vals.length;
         } else {
