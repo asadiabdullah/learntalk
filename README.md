@@ -1,10 +1,6 @@
 # 🌐 Learntalk — AI-Powered Multilingual Language Learning PWA
 
 <p align="center">
-  <img src="client/assets/logo.png" alt="Learntalk Logo" width="120" />
-</p>
-
-<p align="center">
   <strong>A modern Progressive Web Application for immersive, AI-driven language practice featuring customizable personas, real-time grammar correction, goal-oriented exam simulations, and RAG memory.</strong>
 </p>
 
