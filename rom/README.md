@@ -1,55 +1,162 @@
-# ROM (Router & Orchestrator Microservice) Admin Portal
+# 🧠 ROM — Router & Orchestrator Microservice
 
-Proyek ini adalah *microservice* router dan orkestrator yang dikhususkan untuk mengelola LLM gratisan/free tier (seperti Gemini, Groq, SambaNova, Together, dll.) secara cerdas, aman, dan tanpa pemborosan kuota.
+<p align="center">
+  <img src="../client/assets/logo.png" alt="ROM Logo" width="100" />
+</p>
 
-Fase 1 ini memuat **Dashboard Administrator (SPA)** untuk mengelola penyedia API Key, pendaftaran model beserta batas metriknya, dan pembuatan scope tugas serta prioritas pemanggilan model.
+<p align="center">
+  <strong>A high-performance LLM Router & Orchestrator microservice built to manage multi-provider AI keys, scope-based fallback routing, rate limit metrics, and AES-256-GCM key security without quota exhaustion.</strong>
+</p>
 
----
-
-## Struktur Folder Proyek
-* `src/server.ts` : File utama server Fastify, menyediakan REST API untuk Dashboard & serving static files.
-* `src/db.ts` : Modul koneksi pooler PostgreSQL Supabase dengan penanganan **Boot Connection Retry** otomatis.
-* `src/utils/crypto.ts` : Helper enkripsi API Keys menggunakan algoritma **AES-256-GCM** yang aman.
-* `public/` : Folder aset statis Dashboard SPA (HTML, CSS, JS).
-  * `public/login.html` : Halaman login administrator (Username: `asadiabdullah`, Password: `101190029`).
-  * `public/dashboard.html` : Panel SPA utama (Overview, Kelola Provider, Kelola Model, Kelola Scope).
-  * `public/style.css` : Gaya premium bertema Putih, Hijau, Biru.
-  * `public/app.js` : Logika SPA AJAX untuk berinteraksi dengan API Server.
-* `schema.sql` : Skema struktur tabel database Supabase PostgreSQL.
+<p align="center">
+  <a href="https://github.com/asadiabdullah/learntalk"><img src="https://img.shields.io/badge/Microservice-ROM-blueviolet.svg" alt="ROM Microservice"></a>
+  <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-TypeScript-000000.svg?logo=fastify" alt="Fastify"></a>
+  <a href="https://supabase.com/"><img src="https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E.svg?logo=supabase" alt="Supabase"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
+</p>
 
 ---
 
-## Cara Menjalankan Secara Lokal
+## 📌 Overview
 
-1. **Pastikan Dependensi Terinstal:**
-   ```bash
-   npm install
-   ```
+**ROM (Router & Orchestrator Microservice)** is the AI engine behind the Learntalk platform. It provides a unified, OpenAI-compatible proxy interface that automatically routes LLM prompts to the optimal AI model based on task scope (`persona`, `koreksi`, `ujian`, `leta`, `raport`, `rangkuman`, `embedding`).
 
-2. **Jalankan Inisialisasi Database:**
-   Skrip `init-db.js` akan membaca berkas `.env` dan mengeksekusi `schema.sql` langsung ke database Supabase Anda.
-   ```bash
-   node init-db.js
-   ```
-
-3. **Jalankan Server dalam Mode Development:**
-   ```bash
-   npm run dev
-   ```
-   Server akan berjalan di `http://localhost:3000`.
-   Buka halaman login di: [http://localhost:3000/dashboard/login.html](http://localhost:3000/dashboard/login.html)
+If a primary provider or model encounters rate limits (RPM/RPD), ROM seamlessly fails over to fallback models defined in the database priority queue.
 
 ---
 
-## Cara Integrasi ke Aplikasi Utama (`learntalk`)
+## ✨ Key Capabilities
 
-Karena microservice ini dirancang mandiri, Anda memiliki dua cara untuk menyatukannya dengan proyek utama `learntalk`:
+- **🔀 Scope-Based Fallback Routing**: Priority-queued routing per task scope. If Priority #1 fails or exceeds rate limits, ROM automatically fails over to Priority #2, #3, etc.
+- **🔐 AES-256-GCM API Key Encryption**: All third-party API keys (Groq, Gemini, Cohere, SambaNova) are stored encrypted at rest.
+- **📊 Quota & Rate Limit Tracking**: Tracks Requests Per Minute (RPM), Requests Per Day (RPD), Tokens Per Minute (TKM), and Tokens Per Day (TKD).
+- **🖥️ Admin SPA Dashboard**: Full-featured admin portal (`/public/dashboard.html`) to manage Providers, API Keys, Models, Scopes, and Scope-Model priority mapping.
+- **🔌 OpenAI Compatible Proxy (`/api/route`)**: Returns standard OpenAI `ChatCompletion` payload format (`{"choices":[{"message":{"content":"..."}}]}`).
 
-### Pendekatan 1: Microservice Terpisah (Sangat Direkomendasikan)
-* Biarkan folder `rom` berjalan mandiri pada port tersendiri (misal: port `3000` untuk ROM, dan port `8000` untuk `learntalk`).
-* Aplikasi `learntalk` cukup menembak REST API proksi ke ROM untuk pemanggilan LLM.
+---
 
-### Pendekatan 2: Penggabungan Aset Publik
-Jika Anda ingin agar Dashboard Administrator ROM disajikan langsung oleh server publik aplikasi utama `learntalk`:
-1. Salin seluruh konten dari folder `G:\learntalk\rom\public\` ke folder aset publik aplikasi `learntalk` Anda (misalnya ke `G:\learntalk\public\rom-admin\`).
-2. Sesuaikan pemanggilan endpoint `fetch()` pada berkas `app.js` di frontend agar menembak ke URL absolut microservice ROM Anda (contoh: `http://localhost:3000/api/...` alih-alih `/api/...`).
+## 🗄️ Database Schema & Architecture
+
+ROM runs on PostgreSQL (Supabase) with the following core schema:
+
+```
+                          ┌────────────────────────┐
+                          │       providers        │
+                          └───────────┬────────────┘
+                                      │ 1:N
+                          ┌───────────▼────────────┐
+                          │        api_keys        │
+                          │   (AES-256 Encrypted)  │
+                          └───────────┬────────────┘
+                                      │ 1:N
+                          ┌───────────▼────────────┐
+                          │         models         │
+                          └───────────┬────────────┘
+                                      │ N:M (via scope_models)
+                          ┌───────────▼────────────┐
+                          │         scopes         │
+                          │(persona, koreksi, etc) │
+                          └────────────────────────┘
+```
+
+---
+
+## 🔌 API Endpoint Contract
+
+### POST `/api/route`
+Executes an AI request for a specific scope.
+
+#### Request Body
+```json
+{
+  "scope": "persona",
+  "prompt": "<System>...</System>"
+}
+```
+
+#### Response Body (OpenAI Standard)
+```json
+{
+  "id": "chatcmpl-rom-xxxx",
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"response\":\"...\",\"translation\":\"...\",\"tokens\":[]}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 120,
+    "completion_tokens": 85,
+    "total_tokens": 205
+  }
+}
+```
+
+---
+
+## 💻 Tech Stack & Directory Structure
+
+```
+rom/
+├── api/
+│   └── route.js            # Vercel Serverless Function Proxy & Scope Router
+├── lib/
+│   └── db.js               # Supabase PostgreSQL Pooler Connection
+├── public/                 # Admin Dashboard SPA Assets
+│   ├── dashboard.html      # ROM Admin Portal UI
+│   ├── login.html          # Authentication Page
+│   ├── style.css           # Modern Dashboard Styling
+│   └── app.js              # SPA Ajax State Controller
+├── scripts/                # Database Administration Scripts
+├── schema.sql              # Supabase DDL SQL File
+├── init-db.js              # Boot Migration Script
+└── package.json            # Node.js Dependencies
+```
+
+---
+
+## 🚀 Local Development Setup
+
+### 1. Install Dependencies
+```bash
+cd rom
+npm install
+```
+
+### 2. Configure Environment Variables
+Create a `.env` file:
+```env
+DATABASE_URL=postgres://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres
+ENCRYPTION_KEY=32_character_hex_encryption_key_here
+ADMIN_USER=asadiabdullah
+ADMIN_PASS=your_password
+```
+
+### 3. Initialize Database Tables
+```bash
+node init-db.js
+```
+
+### 4. Run Server in Development Mode
+```bash
+npm run dev
+```
+Open admin portal at `http://localhost:3000/dashboard/login.html`.
+
+---
+
+## 👤 Author
+
+**Asadi Abdullah** — *Junior App & Website Engineer*  
+- GitHub: [@asadiabdullah](https://github.com/asadiabdullah)
+
+---
+
+## 📄 License
+
+This microservice is licensed under the [MIT License](LICENSE).
