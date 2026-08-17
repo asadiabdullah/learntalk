@@ -1655,29 +1655,68 @@ async function callRomOrchestrator(scope, prompt) {
 
 function extractLlmContent(rawRes) {
   if (!rawRes) return "";
-  // Unpack OpenAI chat completion format from ROM
+  if (typeof rawRes === 'string') {
+    try {
+      const parsed = JSON.parse(rawRes);
+      if (parsed && typeof parsed === 'object') {
+        return extractLlmContent(parsed);
+      }
+    } catch(e) {}
+    return rawRes;
+  }
   if (rawRes.choices && Array.isArray(rawRes.choices) && rawRes.choices[0] && rawRes.choices[0].message) {
     return rawRes.choices[0].message.content || "";
   }
-  if (typeof rawRes === 'string') return rawRes;
   if (rawRes.response) return rawRes.response;
+  if (rawRes.text) return rawRes.text;
   return JSON.stringify(rawRes);
+}
+
+function stripThinkingProcess(text) {
+  if (!text) return "";
+  let clean = String(text).trim();
+  clean = clean.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  clean = clean.replace(/^(Here's a thinking|Thinking Process|The user wants|I need to|Check constraints|Self-Correction|Output matches|\[Output Generation\])[\s\S]*?(```|\{|\n\n[A-Z0-9\u3040-\u30ff\u4e00-\u9faf]|$)/gi, '').replace(/```$/g, '').trim();
+  return clean;
 }
 
 function parseLlmJsonResponse(rawRes) {
   const contentStr = extractLlmContent(rawRes);
-  let clean = String(contentStr || '').trim();
+  let clean = stripThinkingProcess(contentStr);
   
-  // 1. Ekstrak blok ```json ... ``` dari posisi mana pun (mengatasi bocornya 'Here's a thinking process:')
-  const jsonCodeBlock = clean.match(/```json\s*([\s\S]*?)\s*```/i) || clean.match(/```\s*([\s\S]*?)\s*```/i);
+  // 1. Ekstrak blok ```json ... ``` dari posisi mana pun
+  const jsonCodeBlock = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (jsonCodeBlock && jsonCodeBlock[1]) {
     clean = jsonCodeBlock[1].trim();
   } else {
-    // 2. Jika tidak ada tag ```json, cari kurung kurawal '{' pertama dan '}' terakhir
-    const firstBrace = clean.indexOf('{');
-    const lastBrace = clean.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      clean = clean.substring(firstBrace, lastBrace + 1).trim();
+    // 2. Pencarian dari belakang untuk mencari objek JSON utama
+    let lastPos = clean.length;
+    let foundObjectStr = null;
+    while (lastPos > 0) {
+      const endBrace = clean.lastIndexOf('}', lastPos - 1);
+      if (endBrace === -1) break;
+      const startBrace = clean.lastIndexOf('{', endBrace);
+      if (startBrace === -1) break;
+
+      const candidate = clean.substring(startBrace, endBrace + 1).trim();
+      try {
+        const p = JSON.parse(candidate);
+        if (p && typeof p === 'object') {
+          foundObjectStr = candidate;
+          break;
+        }
+      } catch (e) {}
+      lastPos = startBrace - 1;
+    }
+
+    if (foundObjectStr) {
+      clean = foundObjectStr;
+    } else {
+      const firstBrace = clean.indexOf('{');
+      const lastBrace = clean.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        clean = clean.substring(firstBrace, lastBrace + 1).trim();
+      }
     }
   }
   
@@ -1685,14 +1724,11 @@ function parseLlmJsonResponse(rawRes) {
   try {
     parsed = JSON.parse(clean);
   } catch (err) {
-    console.warn("Gagal parse JSON LLM:", clean);
-    // Bersihkan teks pemikiran/thinking jika parsing JSON gagal total
-    let fallbackText = String(contentStr || '').replace(/Here's a thinking process:[\s\S]*?```(json)?/i, '').replace(/```$/g, '').trim();
-    return { response: fallbackText || contentStr };
+    console.warn("Gagal parse JSON LLM, mengembalikan teks bersih:", clean);
+    return { response: clean || contentStr };
   }
   
   if (typeof parsed === 'object' && parsed !== null) {
-    // Normalisasi kunci JSON fleksibel (case-insensitive & variasi kata)
     const textVal = parsed.response || parsed.Response || parsed.respons || parsed.Respons || parsed.Tanggapan || parsed.tanggapan || parsed.text || parsed.Text || "";
     const translationVal = parsed.translation || parsed.Translation || parsed.terjemahan || parsed.Terjemahan || "";
     const tokensVal = parsed.tokens || parsed.Tokens || [];
@@ -1717,6 +1753,94 @@ function parseLlmJsonResponse(rawRes) {
   }
   
   return { response: clean };
+}
+
+// Custom Zero-Dependency Markdown Renderer (Format Terstruktur Presisi)
+function formatMarkdown(text) {
+  if (!text) return "";
+  let clean = String(text).trim();
+
+  if (clean.startsWith('{') && clean.endsWith('}')) {
+    try {
+      const p = JSON.parse(clean);
+      clean = extractLlmContent(p);
+    } catch(e) {}
+  }
+
+  clean = stripThinkingProcess(clean);
+  clean = clean.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  clean = clean.replace(/^### (.*$)/gim, '<h4 style="margin:8px 0 4px; font-size:1.05rem; color:var(--primary); font-weight:700;">$1</h4>');
+  clean = clean.replace(/^## (.*$)/gim, '<h3 style="margin:10px 0 6px; font-size:1.15rem; color:var(--primary); font-weight:700;">$1</h3>');
+  clean = clean.replace(/^# (.*$)/gim, '<h2 style="margin:12px 0 6px; font-size:1.25rem; color:var(--primary); font-weight:700;">$1</h2>');
+
+  clean = clean.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  clean = clean.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  clean = clean.replace(/`(.*?)`/g, '<code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-size:0.88em;">$1</code>');
+  clean = clean.replace(/^(\s*)[-*]\s+(.*)$/gim, '<div style="display:flex; gap:8px; margin:3px 0 3px 8px;"><span style="color:var(--primary); font-weight:bold;">•</span><span>$2</span></div>');
+  clean = clean.replace(/^(\s*)(\d+)\.\s+(.*)$/gim, '<div style="display:flex; gap:8px; margin:3px 0 3px 8px;"><strong style="color:var(--primary);">$2.</strong><span>$3</span></div>');
+  clean = clean.replace(/\n\n/g, '<div style="height:8px;"></div>').replace(/\n/g, '<br>');
+
+  return clean;
+}
+
+// System Notification Gaya WhatsApp
+function addSystemNotification(text, durationMs = 0) {
+  const container = document.getElementById("chat-messages");
+  if (!container) return null;
+
+  const notifId = "sys-notif-" + Date.now();
+  const html = `
+    <div id="${notifId}" class="whatsapp-sys-notif">
+      <span>${text}</span>
+    </div>
+  `;
+  container.insertAdjacentHTML("beforeend", html);
+  container.scrollTop = container.scrollHeight;
+
+  if (durationMs > 0) {
+    setTimeout(() => {
+      const el = document.getElementById(notifId);
+      if (el) el.remove();
+    }, durationMs);
+  }
+  return notifId;
+}
+
+function removeSystemNotification(notifId) {
+  if (!notifId) return;
+  const el = document.getElementById(notifId);
+  if (el) el.remove();
+}
+
+// Animasi Mengetik (Typing Indicator 3 Titik)
+function showTypingIndicator(personaName = "AI", avatarUrl = "") {
+  removeTypingIndicator();
+  const container = document.getElementById("chat-messages");
+  if (!container) return;
+
+  const defaultAvatar = avatarUrl || "assets/logo.png";
+  const avatarHtml = defaultAvatar.startsWith("http") || defaultAvatar.includes("/")
+    ? `<img src="${defaultAvatar}" class="avatar" alt="${personaName}">`
+    : `<div class="avatar avatar--purple-light" style="font-size:0.9rem; font-weight:700;">${(personaName || 'AI').charAt(0)}</div>`;
+
+  const html = `
+    <div id="typing-indicator-group" class="message-group">
+      ${avatarHtml}
+      <div class="message-bubble typing-bubble">
+        <div class="typing-dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
+  `;
+  container.insertAdjacentHTML("beforeend", html);
+  container.scrollTop = container.scrollHeight;
+}
+
+function removeTypingIndicator() {
+  const el = document.getElementById("typing-indicator-group");
+  if (el) el.remove();
 }
 
 // Memuat pesan persona dari Supabase
@@ -1802,17 +1926,19 @@ async function handleSendMessage() {
     
     // Jika Mode Koreksi Aktif
     if (isCorrectionActive) {
-      showToast("Mengecek tatabahasa...", "info");
+      const corrNotif = addSystemNotification("Sedang mengoreksi...");
       try {
         const correctionRes = await callRomOrchestrator("koreksi", `Periksa kalimat ini: "${text}"`);
         const corrData = parseLlmJsonResponse(correctionRes);
+        removeSystemNotification(corrNotif);
         if (corrData && corrData.needs_correction && corrData.corrected_text) {
           userMsgObj.corrected_text = corrData.corrected_text;
           userMsgObj.diff_html = corrData.diff_html || `~~${text}~~ ${corrData.corrected_text}`;
           textToSendToPersona = corrData.corrected_text;
-          showToast(`Koreksi: ${corrData.explanation || 'Tata bahasa diperbaiki'}`, "warning");
+          addSystemNotification(`Koreksi: ${corrData.explanation || 'Tata bahasa diperbaiki'}`, 4000);
         }
       } catch (cErr) {
+        removeSystemNotification(corrNotif);
         console.warn("Scope koreksi gagal, menggunakan teks asli:", cErr);
       }
     }
@@ -1912,7 +2038,9 @@ ${jsonSchemaFormat}
 </System>
 `;
 
-  showToast("Menunggu balasan AI...", "info");
+  const sysNotifId = addSystemNotification(`Menghubungi ${p.name}...`);
+  showTypingIndicator(p.name, p.avatar);
+
   try {
     const rawRes = await callRomOrchestrator("persona", systemPrompt);
     const aiData = parseLlmJsonResponse(rawRes);
@@ -1925,6 +2053,9 @@ ${jsonSchemaFormat}
       isPecah: false,
       isTranslate: false
     };
+    
+    removeSystemNotification(sysNotifId);
+    removeTypingIndicator();
     
     if (isRefresh && refreshIdx !== null) {
       messagesData[activePersonaId][refreshIdx] = aiMsgObj;
@@ -1950,8 +2081,10 @@ ${jsonSchemaFormat}
       });
     }
   } catch (err) {
+    removeSystemNotification(sysNotifId);
+    removeTypingIndicator();
     console.error("Gagal mendapatkan respons Persona AI:", err);
-    showToast("Gagal terhubung ke AI Persona.", "error");
+    addSystemNotification(`Gagal terhubung ke ${p.name}`, 3000);
   }
 }
 
@@ -1986,7 +2119,9 @@ Respond in character. Output ONLY valid JSON matching this schema:
 </System>
 `;
 
-  showToast("Menilai tanggapan ujian...", "info");
+  const sysNotifId = addSystemNotification(`Menghubungi ${e.persona || e.name}...`);
+  showTypingIndicator(e.name, e.avatar);
+
   try {
     const rawRes = await callRomOrchestrator("ujian", systemPrompt);
     const examData = parseLlmJsonResponse(rawRes);
@@ -2000,6 +2135,9 @@ Respond in character. Output ONLY valid JSON matching this schema:
       isTranslate: false
     };
     
+    removeSystemNotification(sysNotifId);
+    removeTypingIndicator();
+
     messagesData[activeExamId].push(aiMsgObj);
     renderActiveMessages();
     
@@ -2025,8 +2163,10 @@ Respond in character. Output ONLY valid JSON matching this schema:
       });
     }
   } catch (err) {
+    removeSystemNotification(sysNotifId);
+    removeTypingIndicator();
     console.error("Gagal mendapatkan respons Ujian AI:", err);
-    showToast("Gagal terhubung ke AI Ujian.", "error");
+    addSystemNotification(`Gagal terhubung ke Simulasi Ujian`, 3000);
   }
 }
 
@@ -2048,11 +2188,6 @@ window.revealChatArea = function() {
 window.openChat = async function(id) {
   activePersonaId = id;
   activeExamId = null;
-  const p = window.personasData.find(x => x.id === id);
-  if (!p) return;
-  
-  console.log("Membuka chat persona ID:", id);
-  window.revealChatArea();
   
   const headerProfile = document.getElementById("chat-header-profile");
   if (headerProfile) {
@@ -2204,11 +2339,26 @@ Berikan laporan evaluasi ringkas dan tips rekomendasi pembelajaran.
 
   try {
     const rawRes = await callRomOrchestrator("raport", raportPrompt);
-    const reportText = typeof rawRes === 'string' ? rawRes : (rawRes.response || JSON.stringify(rawRes));
+    let reportText = extractLlmContent(rawRes);
     
+    // Unpack jika berupa JSON
+    try {
+      const parsed = JSON.parse(reportText);
+      if (typeof parsed === 'object' && parsed !== null) {
+        reportText = parsed.response || parsed.Response || parsed.text || parsed.tanggapan || reportText;
+      }
+    } catch (e) {}
+
+    // Clean thinking process & markdown codeblocks
+    reportText = reportText.replace(/^(The user wants|Here's a thinking|I need to|Thinking Process)[\s\S]*?```(markdown|json)?/i, '').replace(/```$/g, '').trim();
+
+    const formattedFeedback = window.marked ? window.marked.parse(reportText) : reportText;
+
     document.getElementById("report-score").textContent = isExam ? "Hasil Evaluasi AI" : "Analisis Kelemahan";
-    document.getElementById("report-feedback").textContent = reportText;
-    document.getElementById("report-recommendation").textContent = "Teruskan latihan secara rutin untuk meningkatkan kelancaran percakapan.";
+    const feedbackEl = document.getElementById("report-feedback");
+    const recEl = document.getElementById("report-recommendation");
+    if (feedbackEl) feedbackEl.innerHTML = formattedFeedback;
+    if (recEl) recEl.innerHTML = "<p style='margin:0;'>Teruskan latihan secara rutin untuk meningkatkan kelancaran percakapan.</p>";
     
     if (supabase && window.userProfile) {
       const sessionData = await supabase.auth.getSession();
@@ -2263,7 +2413,7 @@ function renderActiveMessages() {
       }
       
       // Cek apakah mode pecah kata aktif
-      let textContent = `<p>${m.text}</p>`;
+      let textContent = `<p>${formatMarkdown(m.text)}</p>`;
       if (m.isPecah && m.tokens) {
         let tokensHtml = m.tokens.map((tok, tIdx) => {
           return `<span class="word-token" onclick="openWordCard(${idx}, ${tIdx})">${tok.word}</span>`;
@@ -2464,20 +2614,22 @@ Pertanyaan Pengguna: "${question}"
       
       // Unpack teks dari OpenAI/Cohere response
       let cleanAnswer = extractLlmContent(rawRes);
-      cleanAnswer = cleanAnswer.replace(/^```(markdown|json)?\s*/i, '').replace(/```$/g, '').trim();
 
       try {
         const parsed = JSON.parse(cleanAnswer);
         if (typeof parsed === 'object' && parsed !== null) {
           cleanAnswer = parsed.response || parsed.Response || parsed.text || parsed.tanggapan || cleanAnswer;
         }
-      } catch (e) {
-        // Teks biasa
-      }
+      } catch (e) {}
+
+      // Clean thinking process & markdown codeblock wrappers
+      cleanAnswer = cleanAnswer.replace(/^(The user wants|Here's a thinking|I need to|Thinking Process)[\s\S]*?```(markdown|json)?/i, '').replace(/```$/g, '').trim();
+
+      const formattedHtml = window.marked ? window.marked.parse(cleanAnswer) : cleanAnswer;
 
       const answerTextEl = document.getElementById("leta-answer-text");
       const answerBoxEl = document.getElementById("leta-answer-box");
-      if (answerTextEl) answerTextEl.textContent = cleanAnswer || "Leta tidak memberikan jawaban.";
+      if (answerTextEl) answerTextEl.innerHTML = formattedHtml || "Leta tidak memberikan jawaban.";
       if (answerBoxEl) answerBoxEl.classList.remove("hidden");
     } catch (err) {
       console.error("Gagal bertanya ke Leta:", err);

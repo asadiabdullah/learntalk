@@ -16,6 +16,9 @@
     
     <!-- Styles -->
     <link rel="stylesheet" href="/style.css">
+    
+    <!-- Markdown Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     
@@ -529,20 +532,18 @@
                 
                 <div style="background: var(--surface-soft); padding: 15px; border-radius: 12px; margin-bottom: 15px; border-left: 4px solid var(--primary);">
                     <h4 style="margin: 0 0 6px; font-size: 0.95rem; color: var(--text-soft);">Skor Keseluruhan</h4>
-                    <p id="report-score" style="margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--primary);">85 / 100</p>
+                    <p id="report-score" style="margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--primary);">-</p>
                 </div>
 
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-soft); display: block; margin-bottom: 6px;">Umpan Balik AI (Evaluasi)</label>
-                    <div id="report-feedback" style="background: var(--surface-soft); padding: 12px; border-radius: 8px; font-size: 0.9rem; line-height: 1.4; max-height: 150px; overflow-y: auto;">
-                        Tata bahasa Anda secara keseluruhan sudah baik. Anda berhasil menanyakan kehilangan paspor dengan sopan. Beberapa koreksi pada penggunaan partikel 'ni' dan 'de' telah disertakan dalam riwayat chat.
+                    <div id="report-feedback" style="background: var(--surface-soft); padding: 12px; border-radius: 8px; font-size: 0.9rem; line-height: 1.5; max-height: 200px; overflow-y: auto;">
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-soft); display: block; margin-bottom: 6px;">Rekomendasi Pembelajaran</label>
-                    <div id="report-recommendation" style="background: var(--surface-soft); padding: 12px; border-radius: 8px; font-size: 0.9rem; line-height: 1.4;">
-                        Pelajari kembali perbedaan partikel tempat tujuan dan partikel tempat aktivitas (ke vs di).
+                    <div id="report-recommendation" style="background: var(--surface-soft); padding: 12px; border-radius: 8px; font-size: 0.9rem; line-height: 1.5;">
                     </div>
                 </div>
             </div>
