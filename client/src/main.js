@@ -2282,7 +2282,7 @@ function renderActiveMessages() {
           <button onclick="togglePecahKata(${idx})" class="${m.isPecah ? 'active' : ''}" title="Pecah Kata"><i class="fa-solid fa-scissors"></i></button>
           <button onclick="refreshMessage(${idx})" title="Refresh"><i class="fa-solid fa-rotate"></i></button>
           <button onclick="playDummyAudio(this)" title="Suara"><i class="fa-solid fa-volume-high"></i></button>
-          <button onclick="openAskLetaModal()" title="Tanya Leta"><i class="fa-solid fa-robot"></i></button>
+          <button onclick="openAskLetaModal(${idx})" title="Tanya Leta"><i class="fa-solid fa-robot"></i></button>
         </div>
         `
         : `
@@ -2371,75 +2371,173 @@ window.playDummyAudio = function(btn) {
   }
 };
 
-// Aksi: Buka Modal Tanya Leta
-window.openAskLetaModal = function() {
-  document.getElementById("leta-question").value = "";
-  document.getElementById("leta-answer-box").classList.add("hidden");
+// State Konteks Tanya Leta
+let currentLetaSelectedText = null;
+
+// Aksi: Buka Modal Tanya Leta (Desain Ulang dengan Konteks & Reset)
+window.openAskLetaModal = function(msgIdx = null) {
+  currentLetaSelectedText = null;
+  const questionInput = document.getElementById("leta-question");
+  const answerBox = document.getElementById("leta-answer-box");
+  const answerText = document.getElementById("leta-answer-text");
+  const contextText = document.getElementById("leta-context-text");
+
+  // Selalu bersihkan modal saat dibuka
+  if (questionInput) questionInput.value = "";
+  if (answerBox) answerBox.classList.add("hidden");
+  if (answerText) answerText.textContent = "";
+
+  const currentActiveId = activePersonaId || activeExamId;
+  let personaName = "percakapan ini";
+  if (activePersonaId) {
+    const p = window.personasData?.find(x => x.id === activePersonaId);
+    if (p) personaName = p.name;
+  } else if (activeExamId) {
+    const e = window.examsData?.find(x => x.id === activeExamId);
+    if (e) personaName = e.name;
+  }
+
+  if (typeof msgIdx === 'number' && messagesData[currentActiveId] && messagesData[currentActiveId][msgIdx]) {
+    const targetMsg = messagesData[currentActiveId][msgIdx];
+    currentLetaSelectedText = targetMsg.text || "";
+    if (contextText) contextText.textContent = `Bertanya: "${currentLetaSelectedText}"`;
+  } else {
+    if (contextText) contextText.textContent = `Bertanya: percakapan dengan ${personaName}`;
+  }
+
   openModal('modal-tanya-leta');
+};
+
+// Aksi: Tutup & Bersihkan Modal Tanya Leta
+window.closeAskLetaModal = function() {
+  const questionInput = document.getElementById("leta-question");
+  const answerBox = document.getElementById("leta-answer-box");
+  const answerText = document.getElementById("leta-answer-text");
+  
+  if (questionInput) questionInput.value = "";
+  if (answerBox) answerBox.classList.add("hidden");
+  if (answerText) answerText.textContent = "";
+  currentLetaSelectedText = null;
+  
+  closeModal('modal-tanya-leta');
 };
 
 // Handler Submit Tanya Leta ke ROM Scope Leta
 const btnAskLetaSubmit = document.getElementById("btn-ask-leta");
 if (btnAskLetaSubmit) {
   btnAskLetaSubmit.addEventListener("click", async () => {
-    const question = document.getElementById("leta-question").value.trim();
+    const questionInput = document.getElementById("leta-question");
+    const question = questionInput ? questionInput.value.trim() : "";
     if (!question) {
-      alert("Tuliskan pertanyaan Anda terlebih dahulu.");
+      showToast("Tuliskan pertanyaan Anda terlebih dahulu.", "warning");
       return;
     }
     
     btnAskLetaSubmit.disabled = true;
-    btnAskLetaSubmit.textContent = "Berpikir...";
+    btnAskLetaSubmit.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Memproses...`;
     
     try {
-      const letaPrompt = `Pertanyaan Pengguna: "${question}"\nJelaskan dalam bahasa Indonesia dengan jelas dan berikan contoh kalimatnya.`;
-      const res = await callRomOrchestrator("leta", letaPrompt);
-      const answerText = typeof res === 'string' ? res : (res.response || JSON.stringify(res));
+      let targetLang = "jp";
+      let entityName = "Persona";
+      if (activePersonaId) {
+        const p = window.personasData?.find(x => x.id === activePersonaId);
+        if (p) { targetLang = p.language || "jp"; entityName = p.name; }
+      } else if (activeExamId) {
+        const e = window.examsData?.find(x => x.id === activeExamId);
+        if (e) { targetLang = e.language || "jp"; entityName = e.name; }
+      }
+
+      let contextStr = currentLetaSelectedText 
+        ? `Teks Pesan Terpilih: "${currentLetaSelectedText}"`
+        : `Percakapan dengan ${entityName}`;
+
+      const systemPromptLeta = `
+<System>
+Role: Leta, language learning assistant.
+Context: ${contextStr}
+Task: Answer the user question in Indonesian clearly using bullet points and bold formatting. Include ${targetLang} examples with Indonesian translations.
+</System>
+Pertanyaan Pengguna: "${question}"
+`;
+
+      const rawRes = await callRomOrchestrator("leta", systemPromptLeta);
       
-      document.getElementById("leta-answer-text").textContent = answerText;
-      document.getElementById("leta-answer-box").classList.remove("hidden");
+      // Unpack teks dari OpenAI/Cohere response
+      let cleanAnswer = extractLlmContent(rawRes);
+      cleanAnswer = cleanAnswer.replace(/^```(markdown|json)?\s*/i, '').replace(/```$/g, '').trim();
+
+      try {
+        const parsed = JSON.parse(cleanAnswer);
+        if (typeof parsed === 'object' && parsed !== null) {
+          cleanAnswer = parsed.response || parsed.Response || parsed.text || parsed.tanggapan || cleanAnswer;
+        }
+      } catch (e) {
+        // Teks biasa
+      }
+
+      const answerTextEl = document.getElementById("leta-answer-text");
+      const answerBoxEl = document.getElementById("leta-answer-box");
+      if (answerTextEl) answerTextEl.textContent = cleanAnswer || "Leta tidak memberikan jawaban.";
+      if (answerBoxEl) answerBoxEl.classList.remove("hidden");
     } catch (err) {
-      alert("Gagal bertanya kepada Leta: " + err.message);
+      console.error("Gagal bertanya ke Leta:", err);
+      showToast("Gagal bertanya kepada Leta: " + err.message, "error");
     } finally {
       btnAskLetaSubmit.disabled = false;
-      btnAskLetaSubmit.textContent = "Tanyakan";
+      btnAskLetaSubmit.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Tanyakan`;
     }
   });
 }
 
-// POPOVER WORD CARD CONTROLLER
+// POPOVER WORD CARD CONTROLLER (Error-Proof)
 window.openWordCard = function(msgIdx, tokenIdx) {
-  const m = messagesData[activePersonaId][msgIdx];
-  if (!m || !m.tokens) return;
+  const currentId = activePersonaId || activeExamId;
+  if (!currentId || !messagesData[currentId]) return;
+  const list = messagesData[currentId];
+  if (!list || !list[msgIdx]) return;
+  const m = list[msgIdx];
+  if (!m || !m.tokens || !m.tokens[tokenIdx]) return;
   
   activeWordCardTokens = m.tokens;
   activeWordCardIndex = tokenIdx;
   
   updateWordCardUI();
-  document.getElementById("popover-word-card").classList.remove("hidden");
+  const popover = document.getElementById("popover-word-card");
+  if (popover) {
+    popover.classList.remove("hidden");
+  }
 };
 
 window.closeWordCard = function() {
-  document.getElementById("popover-word-card").classList.add("hidden");
+  const popover = document.getElementById("popover-word-card");
+  if (popover) {
+    popover.classList.add("hidden");
+  }
 };
 
 function updateWordCardUI() {
+  if (!activeWordCardTokens || !activeWordCardTokens[activeWordCardIndex]) return;
   const token = activeWordCardTokens[activeWordCardIndex];
-  if (!token) return;
   
-  document.getElementById("word-card-title").textContent = token.word;
-  document.getElementById("word-card-reading").textContent = token.reading || "-";
-  document.getElementById("word-card-meaning").textContent = token.meaning || "-";
-  document.getElementById("word-card-index").textContent = `${activeWordCardIndex + 1} / ${activeWordCardTokens.length}`;
+  const titleEl = document.getElementById("word-card-title");
+  const readingEl = document.getElementById("word-card-reading");
+  const meaningEl = document.getElementById("word-card-meaning");
+  const indexEl = document.getElementById("word-card-index");
   
-  // Set Bintang Active / Inactive
+  if (titleEl) titleEl.textContent = token.word || token.text || "-";
+  if (readingEl) readingEl.textContent = token.reading || token.romaji || "-";
+  if (meaningEl) meaningEl.textContent = token.meaning || "-";
+  if (indexEl) indexEl.textContent = `${activeWordCardIndex + 1} / ${activeWordCardTokens.length}`;
+  
   const btnStar = document.getElementById("btn-star-word");
-  if (token.isStarred) {
-    btnStar.classList.add("active");
-    btnStar.innerHTML = `<i class="fa-solid fa-star"></i>`;
-  } else {
-    btnStar.classList.remove("active");
-    btnStar.innerHTML = `<i class="fa-regular fa-star"></i>`;
+  if (btnStar) {
+    if (token.isStarred) {
+      btnStar.classList.add("active");
+      btnStar.innerHTML = `<i class="fa-solid fa-star"></i>`;
+    } else {
+      btnStar.classList.remove("active");
+      btnStar.innerHTML = `<i class="fa-regular fa-star"></i>`;
+    }
   }
 }
 

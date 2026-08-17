@@ -478,22 +478,34 @@
 
     <!-- MODAL TANYA LETA -->
     <div id="modal-tanya-leta" class="modal-overlay hidden" style="z-index: 2100;">
-        <div class="modal-container" style="max-width: 450px;">
+        <div class="modal-container" style="max-width: 480px;">
             <header class="modal-header">
                 <h2>Tanya Leta</h2>
-                <button class="icon-button" onclick="closeModal('modal-tanya-leta')"><i class="fa-solid fa-xmark"></i></button>
+                <button class="icon-button" onclick="closeAskLetaModal()"><i class="fa-solid fa-xmark"></i></button>
             </header>
             <div class="modal-body" style="padding: 20px;">
-                <p style="color: var(--text-soft); font-size: 0.9rem; margin-bottom: 15px;">Tanya Leta tentang kata atau kalimat sulit dalam obrolan ini:</p>
-                <div class="form-group">
-                    <textarea id="leta-question" class="form-control" rows="4" placeholder="Contoh: Apa bedanya 'Kore' dan 'Sore'?" style="resize: none;"></textarea>
+                <!-- Section Konteks -->
+                <div id="leta-context-box" style="background: var(--surface-soft); padding: 12px 15px; border-radius: 10px; margin-bottom: 15px; border-left: 3px solid var(--primary); font-size: 0.88rem; color: var(--text);">
+                    <strong style="color: var(--primary); display: block; margin-bottom: 3px;">Konteks:</strong>
+                    <span id="leta-context-text">Bertanya: percakapan umum</span>
                 </div>
-                <button class="btn-primary w-full" id="btn-ask-leta" style="margin-top: 15px;">Tanyakan</button>
+
+                <!-- Input Prompt -->
+                <div class="form-group">
+                    <label style="display: block; font-weight: 500; font-size: 0.88rem; margin-bottom: 6px; color: var(--text-soft);">Pertanyaan Anda</label>
+                    <textarea id="leta-question" class="form-control" rows="3" placeholder="Contoh: Mengapa partikel 'de' digunakan dalam kalimat ini?" style="resize: none; width: 100%; border-radius: 8px; border: 1px solid var(--line); padding: 10px; font-size: 0.9rem; background: var(--surface); color: var(--text);"></textarea>
+                </div>
                 
-                <!-- Dummy Answer Box -->
-                <div id="leta-answer-box" class="hidden" style="margin-top: 20px; padding: 15px; background: var(--surface-soft); border-radius: 8px; border-left: 4px solid var(--primary);">
-                    <h4 style="margin: 0 0 8px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-robot" style="color: var(--primary);"></i> Leta:</h4>
-                    <p id="leta-answer-text" style="margin: 0; font-size: 0.9rem; line-height: 1.4; color: var(--text);"></p>
+                <button class="btn-primary w-full" id="btn-ask-leta" style="margin-top: 15px; width: 100%; padding: 10px; font-weight: 600; border-radius: 8px; border: none; background: var(--primary); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <i class="fa-solid fa-paper-plane"></i> Tanyakan
+                </button>
+                
+                <!-- Ruang Jawaban -->
+                <div id="leta-answer-box" class="hidden" style="margin-top: 20px; padding: 15px; background: var(--surface-soft); border-radius: 10px; border: 1px solid var(--line);">
+                    <h4 style="margin: 0 0 10px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; color: var(--primary); font-weight: 600;">
+                        <i class="fa-solid fa-robot"></i> Jawaban Leta:
+                    </h4>
+                    <div id="leta-answer-text" style="margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--text); white-space: pre-wrap;"></div>
                 </div>
             </div>
         </div>

@@ -667,6 +667,7 @@ textarea {
 .modal-overlay.hidden {
   opacity: 0;
   visibility: hidden;
+  pointer-events: none;
 }
 .modal-container {
   background: var(--surface);
